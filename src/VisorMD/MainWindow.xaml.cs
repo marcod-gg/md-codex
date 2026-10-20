@@ -19,7 +19,11 @@ namespace VisorMD;
 
 public partial class MainWindow : Window
 {
-    private enum Modo { Vista, Dividido, Editor }
+    private enum Modo { Vista, Dividido, Editor, Pro }
+
+    // Host de la página del editor Pro, que vive en la carpeta Pro junto al .exe. No termina en
+    // ".visormd" para no chocar con el filtro que sirve los archivos de los documentos.
+    private const string HostPro = "visormd.editor";
 
     private enum Panel { Explorador, Esquema }
 
@@ -36,6 +40,12 @@ public partial class MainWindow : Window
     private double _anchoLateral = 260;
     private IReadOnlyList<Titulo> _titulos = [];
     private bool _vistaLista;
+    private Task? _inicioVisor;
+    private CoreWebView2Environment? _entorno;
+    private bool _proIniciado;
+    private bool _proListo;
+    // Evita volver a sincronizar con el editor Pro cuando el cierre ya lo hizo.
+    private bool _cierreSincronizado;
     // Al cambiar de pestaña, la vista previa vuelve al scroll que tenía esa pestaña.
     private bool _restaurarScrollVista;
     // Marcar un botón de modo vuelve a llamar a AplicarModo; esto corta la recursión.
@@ -73,7 +83,8 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
-            await IniciarVisorAsync();
+            _inicioVisor = IniciarVisorAsync();
+            await _inicioVisor;
             foreach (var archivo in archivosIniciales)
                 AbrirArchivo(archivo);
         };
@@ -85,6 +96,7 @@ public partial class MainWindow : Window
     {
         var datos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VisorMD", "WebView2");
         var entorno = await CoreWebView2Environment.CreateAsync(userDataFolder: datos);
+        _entorno = entorno;
         await Visor.EnsureCoreWebView2Async(entorno);
 
         var core = Visor.CoreWebView2;
@@ -133,7 +145,7 @@ public partial class MainWindow : Window
             EstadoFinLinea.Content = texto.Contains("\r\n") || !texto.Contains('\n') ? "CRLF" : "LF";
         }
 
-        if (!_vistaLista || (p is not null && _modo == Modo.Editor))
+        if (!_vistaLista || (p is not null && _modo is Modo.Editor or Modo.Pro))
             return;
 
         var ubicacion = p is null ? null : Ubicar(p);
@@ -233,6 +245,131 @@ public partial class MainWindow : Window
         {
             // Mensaje con otro formato: se ignora.
         }
+    }
+
+    // ---------- Modo Pro ----------
+
+    // Muestra el editor Pro: la primera vez carga su página; después solo le envía el documento activo.
+    private async Task MostrarProAsync()
+    {
+        if (_proIniciado)
+        {
+            CargarEnPro();
+            return;
+        }
+        _proIniciado = true;
+        if (_inicioVisor is not null)
+            await _inicioVisor;
+        if (_entorno is not { } entorno)
+            return;
+
+        await VisorPro.EnsureCoreWebView2Async(entorno);
+        var core = VisorPro.CoreWebView2;
+        core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
+        core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        // Esta asignación sí sirve aquí: se hace antes de cargar la página.
+        core.SetVirtualHostNameToFolderMapping(HostPro, Path.Combine(AppContext.BaseDirectory, "Pro"), CoreWebView2HostResourceAccessKind.Allow);
+        core.AddWebResourceRequestedFilter("https://*.visormd/*", CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested += (_, e) => e.Response = ServirArchivo(entorno, e.Request.Uri);
+        core.NavigationStarting += (_, e) =>
+        {
+            if (e.Uri.StartsWith($"https://{HostPro}/", StringComparison.OrdinalIgnoreCase))
+                return;
+            e.Cancel = true;
+            AbrirEnlace(e.Uri);
+        };
+        core.NewWindowRequested += (_, e) =>
+        {
+            e.Handled = true;
+            AbrirEnlace(e.Uri);
+        };
+        core.WebMessageReceived += VisorPro_WebMessageReceived;
+        core.Navigate($"https://{HostPro}/index.html");
+    }
+
+    private void CargarEnPro()
+    {
+        if (!_proListo || _activa is not { } p)
+            return;
+        var ubicacion = Ubicar(p);
+        if (ubicacion is not null)
+            _carpetasPorHost[ubicacion.Host] = ubicacion.Raiz;
+        EnviarPro(new { tipo = "cargar", id = p.Id, markdown = p.Documento.Text, @base = ubicacion?.Base });
+        EnviarPro(new { tipo = "enfocar" });
+    }
+
+    private void EnviarPro(object mensaje) => VisorPro.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(mensaje));
+
+    private void VisorPro_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(e.WebMessageAsJson);
+            var raiz = json.RootElement;
+            switch (raiz.GetProperty("tipo").GetString())
+            {
+                case "listo":
+                    _proListo = true;
+                    if (_modo == Modo.Pro)
+                        CargarEnPro();
+                    break;
+                case "cambio":
+                    AplicarDesdePro(raiz);
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            // Mensaje con otro formato: se ignora.
+        }
+    }
+
+    // Trae lo último escrito en el editor Pro, que avisa con un pequeño retraso. Se usa antes de
+    // guardar o cerrar, para no perder las últimas pulsaciones.
+    private async Task SincronizarProAsync()
+    {
+        if (!_proListo)
+            return;
+        var resultado = await VisorPro.CoreWebView2.ExecuteScriptAsync("window.visormd.pendiente()");
+        using var json = JsonDocument.Parse(resultado);
+        if (json.RootElement.ValueKind == JsonValueKind.Object)
+            AplicarDesdePro(json.RootElement);
+    }
+
+    // Aplica el Markdown del editor Pro a su pestaña. Solo reemplaza el tramo que cambió,
+    // así el historial de deshacer y el resto del archivo quedan intactos.
+    private void AplicarDesdePro(JsonElement cambio)
+    {
+        var id = cambio.GetProperty("id").GetInt32();
+        var markdown = cambio.GetProperty("markdown").GetString() ?? "";
+        if (_pestanas.FirstOrDefault(p => p.Id == id) is not { } pestana)
+            return;
+
+        var actual = pestana.Documento.Text;
+        // Conserva los fines de línea del archivo; si son mixtos, el estilo que más se usa.
+        var crlf = actual.Split("\r\n").Length - 1;
+        var lf = actual.Count(c => c == '\n') - crlf;
+        markdown = markdown.Replace("\r\n", "\n");
+        if (crlf > lf)
+            markdown = markdown.Replace("\n", "\r\n");
+        if (markdown == actual)
+            return;
+
+        var limite = Math.Min(actual.Length, markdown.Length);
+        var inicio = 0;
+        while (inicio < limite && actual[inicio] == markdown[inicio])
+            inicio++;
+        var fin = 0;
+        while (fin < limite - inicio && actual[actual.Length - 1 - fin] == markdown[markdown.Length - 1 - fin])
+            fin++;
+        pestana.Documento.Replace(inicio, actual.Length - inicio - fin, markdown.Substring(inicio, markdown.Length - inicio - fin));
+    }
+
+    // Ejecuta una acción después de traer lo pendiente del editor Pro.
+    private async void TrasSincronizar(Action accion)
+    {
+        await SincronizarProAsync();
+        accion();
     }
 
     // Lleva el editor y la vista previa a una línea del documento (base 0).
@@ -391,14 +528,21 @@ public partial class MainWindow : Window
         ActualizarPosicion();
         ActualizarCodificacion();
         ActualizarDocumento();
-        if (pestana is not null && _modo != Modo.Vista)
+        if (pestana is not null && _modo is Modo.Dividido or Modo.Editor)
             Dispatcher.BeginInvoke(() => Editor.TextArea.Focus(), DispatcherPriority.Input);
+        if (pestana is not null && _modo == Modo.Pro)
+            _ = MostrarProAsync();
         CommandManager.InvalidateRequerySuggested();
     }
 
     private void CerrarPestanas(IEnumerable<Pestana> cuales)
     {
-        var cerrar = cuales.ToList();
+        var lista = cuales.ToList();
+        TrasSincronizar(() => CerrarPestanasAhora(lista));
+    }
+
+    private void CerrarPestanasAhora(List<Pestana> cerrar)
+    {
         if (cerrar.Count == 0 || !ConfirmarDescartar(cerrar))
             return;
 
@@ -518,6 +662,8 @@ public partial class MainWindow : Window
         p.Cursor = Math.Min(posicion, texto.Length);
         if (p == _activa)
             Editor.CaretOffset = p.Cursor;
+        if (p == _activa && _modo == Modo.Pro)
+            CargarEnPro();
     }
 
     // ---------- Explorador ----------
@@ -594,15 +740,22 @@ public partial class MainWindow : Window
         _aplicandoModo = true;
         try
         {
+            // Al salir del modo Pro se trae lo último escrito, para que el editor y la vista lo muestren.
+            if (_modo == Modo.Pro && modo != Modo.Pro)
+                _ = SincronizarProAsync();
+
             _modo = modo;
             BotonVista.IsChecked = modo == Modo.Vista;
             BotonDividido.IsChecked = modo == Modo.Dividido;
             BotonEditor.IsChecked = modo == Modo.Editor;
+            BotonPro.IsChecked = modo == Modo.Pro;
             EstadoModo.Content = modo.ToString();
             AplicarDisposicion();
 
-            if (_activa is not null && modo != Modo.Vista)
+            if (_activa is not null && modo is Modo.Dividido or Modo.Editor)
                 Dispatcher.BeginInvoke(() => Editor.TextArea.Focus(), DispatcherPriority.Input);
+            if (_activa is not null && modo == Modo.Pro)
+                _ = MostrarProAsync();
             ActualizarDocumento();
             CommandManager.InvalidateRequerySuggested();
         }
@@ -616,10 +769,13 @@ public partial class MainWindow : Window
     private void AplicarDisposicion()
     {
         var hayDocumento = _activa is not null;
-        var conEditor = hayDocumento && _modo != Modo.Vista;
-        var conVista = !hayDocumento || _modo != Modo.Editor;
+        var conEditor = hayDocumento && _modo is Modo.Dividido or Modo.Editor;
+        var conVista = !hayDocumento || _modo is Modo.Vista or Modo.Dividido;
+        var conPro = hayDocumento && _modo == Modo.Pro;
+        VisorPro.Visibility = Visible(conPro);
 
-        ColumnaEditor.Width = conEditor ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        // El editor Pro abarca las tres columnas: alguna tiene que tener ancho.
+        ColumnaEditor.Width = conEditor || conPro ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         ColumnaVista.Width = conVista ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         Editor.Visibility = Visible(conEditor);
         Visor.Visibility = Visible(conVista);
@@ -741,6 +897,7 @@ public partial class MainWindow : Window
         // Evita el destello blanco antes de que cargue la vista en modo oscuro.
         var fondo = Tema.Color(p.Fondo);
         Visor.DefaultBackgroundColor = System.Drawing.Color.FromArgb(fondo.A, fondo.R, fondo.G, fondo.B);
+        VisorPro.DefaultBackgroundColor = Visor.DefaultBackgroundColor;
     }
 
     private void AlCambiarPreferencias(object sender, UserPreferenceChangedEventArgs e)
@@ -782,6 +939,21 @@ public partial class MainWindow : Window
             Ciclar(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1);
             e.Handled = true;
             return;
+        }
+
+        // Las vistas web se quedan con las teclas: los atajos de la ventana se atienden aquí antes.
+        // Los que no aplican (Ctrl+B o Ctrl+I fuera del editor de texto) siguen hacia la página.
+        if (Visor.IsKeyboardFocusWithin || VisorPro.IsKeyboardFocusWithin)
+        {
+            foreach (var atajo in InputBindings.OfType<KeyBinding>())
+            {
+                if (atajo.Gesture.Matches(this, e) && atajo.Command is RoutedCommand comando && comando.CanExecute(null, this))
+                {
+                    comando.Execute(null, this);
+                    e.Handled = true;
+                    return;
+                }
+            }
         }
         base.OnPreviewKeyDown(e);
     }
@@ -902,7 +1074,11 @@ public partial class MainWindow : Window
 
     private void ListaEsquema_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (Ancestro<ListBoxItem>(e.OriginalSource)?.DataContext is Titulo titulo)
+        if (Ancestro<ListBoxItem>(e.OriginalSource)?.DataContext is not Titulo titulo)
+            return;
+        if (_modo == Modo.Pro && _proListo)
+            EnviarPro(new { tipo = "titulo", indice = _titulos.ToList().IndexOf(titulo) });
+        else
             IrALinea(titulo.Linea);
     }
 
@@ -927,7 +1103,7 @@ public partial class MainWindow : Window
             AplicarModo(Enum.Parse<Modo>(modo));
     }
 
-    private void EstadoModo_Click(object sender, RoutedEventArgs e) => AplicarModo((Modo)(((int)_modo + 1) % 3));
+    private void EstadoModo_Click(object sender, RoutedEventArgs e) => AplicarModo((Modo)(((int)_modo + 1) % 4));
 
     private void RefrescarArbol_Click(object sender, RoutedEventArgs e) => RefrescarArbol();
 
@@ -992,24 +1168,24 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Guardar_Executed(object sender, ExecutedRoutedEventArgs e)
+    private void Guardar_Executed(object sender, ExecutedRoutedEventArgs e) => TrasSincronizar(() =>
     {
         if (_activa is not null)
             Guardar(_activa);
-    }
+    });
 
-    private void GuardarComo_Executed(object sender, ExecutedRoutedEventArgs e)
+    private void GuardarComo_Executed(object sender, ExecutedRoutedEventArgs e) => TrasSincronizar(() =>
     {
         if (_activa is not null)
             GuardarComo(_activa);
-    }
+    });
 
-    private void GuardarTodo_Executed(object sender, ExecutedRoutedEventArgs e)
+    private void GuardarTodo_Executed(object sender, ExecutedRoutedEventArgs e) => TrasSincronizar(() =>
     {
         foreach (var p in _pestanas.Where(p => p.Modificado).ToList())
             if (!Guardar(p))
                 return;
-    }
+    });
 
     private void CerrarPestana_Executed(object sender, ExecutedRoutedEventArgs e)
     {
@@ -1048,13 +1224,17 @@ public partial class MainWindow : Window
 
     private void HayArchivo_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _activa?.Ruta is not null;
 
-    private void EditorVisible_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _activa is not null && _modo != Modo.Vista;
+    // Negrita y cursiva del editor de texto; en el modo Pro, Ctrl+B y Ctrl+I los atiende el propio editor web.
+    private void EditorVisible_CanExecute(object sender, CanExecuteRoutedEventArgs e) =>
+        e.CanExecute = _activa is not null && _modo is Modo.Dividido or Modo.Editor;
 
     private void ModoVista_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Vista);
 
     private void ModoDividido_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Dividido);
 
     private void ModoEditor_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Editor);
+
+    private void ModoPro_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Pro);
 
     private void VerExplorador_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Explorador);
 
@@ -1072,6 +1252,18 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        // Primero se trae lo último escrito en el editor Pro (es asíncrono) y luego se vuelve a cerrar.
+        if (_proListo && !_cierreSincronizado)
+        {
+            e.Cancel = true;
+            TrasSincronizar(() =>
+            {
+                _cierreSincronizado = true;
+                Close();
+                _cierreSincronizado = false; // si el usuario canceló, la próxima vez se vuelve a sincronizar
+            });
+            return;
+        }
         if (!ConfirmarDescartar(_pestanas))
             e.Cancel = true;
         base.OnClosing(e);

@@ -9,6 +9,11 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <!-- Editor por bloques del modo Pro, compilado desde ..\VisorMD.Pro con "npm run build". -->
+  <ItemGroup>
+    <None Include="Pro\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="Markdig" Version="1.4.2" />
