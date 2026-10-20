@@ -248,11 +248,12 @@ public static partial class Renderizador
         }
         @media (prefers-color-scheme: dark) {
           :root {
-            --fondo: #0d1117;
+            /* Igual que el área de trabajo (Tema.cs); el código, un tono más hundido. */
+            --fondo: #1f242b;
             --texto: #e6edf3;
             --suave: #9198a1;
             --borde: #3d444d;
-            --codigo: #151b23;
+            --codigo: #161b22;
             --enlace: #4493f8;
             --cita: #9198a1;
           }

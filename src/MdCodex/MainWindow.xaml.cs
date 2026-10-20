@@ -1064,6 +1064,7 @@ public partial class MainWindow : Window
         recursos["Chrome.Activo"] = Tema.Pincel(p.ChromeActivo);
         recursos["Acento"] = Tema.Pincel(p.Acento);
         recursos["Editor.Fondo"] = Tema.Pincel(p.Fondo);
+        recursos["Lateral.Fondo"] = Tema.Pincel(p.Lateral);
 
         Editor.Background = Tema.Pincel(p.Fondo);
         Editor.Foreground = Tema.Pincel(p.Texto);

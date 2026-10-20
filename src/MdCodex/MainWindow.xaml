@@ -198,8 +198,10 @@
                                   Click="Actividad_Click" Content="&#xE8FD;" ToolTip="Esquema (Ctrl+Mayús+O)" />
                 </StackPanel>
 
-                <!-- Barra lateral -->
-                <DockPanel x:Name="Lateral" Grid.Column="1">
+                <!-- Barra lateral: panel propio, un tono entre el marco y el área de trabajo -->
+                <Border x:Name="Lateral" Grid.Column="1" Margin="0,0,0,8" CornerRadius="8" BorderThickness="1"
+                        Background="{DynamicResource Lateral.Fondo}" BorderBrush="{DynamicResource Chrome.Borde}">
+                <DockPanel>
                     <Grid DockPanel.Dock="Top" Height="35" Margin="20,0,8,0">
                         <TextBlock x:Name="TituloLateral" Style="{StaticResource EtiquetaTenue}" Text="EXPLORADOR" />
                         <StackPanel x:Name="AccionesExplorador" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -262,8 +264,9 @@
                                    TextWrapping="Wrap" Foreground="{DynamicResource Chrome.Tenue}" />
                     </Grid>
                 </DockPanel>
+                </Border>
 
-                <GridSplitter x:Name="DivisorLateral" Grid.Column="2" Width="4" Style="{StaticResource Divisor}" />
+                <GridSplitter x:Name="DivisorLateral" Grid.Column="2" Width="8" Style="{StaticResource Divisor}" />
 
                 <!-- Espacio de trabajo: pestañas tipo carpeta de archivador sobre un panel redondeado -->
                 <Grid Grid.Column="3" Margin="0,0,8,8">

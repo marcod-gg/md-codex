@@ -3,11 +3,13 @@ using Microsoft.Win32;
 
 namespace MdCodex;
 
-// Colores de la ventana y del editor; la vista previa usa los mismos tonos desde su CSS.
+// Colores de la ventana y del editor; la vista previa y el editor Pro usan los mismos tonos desde su CSS.
+// Tres niveles de fondo, del marco al contenido: barra de título y de actividad (ChromeFondo),
+// barra lateral (Lateral) y área de trabajo (Fondo). Todo el texto cumple WCAG AA sobre los tres.
 public sealed record Paleta(
     string Fondo, string Texto, string Tenue, string Seleccion, string LineaActual,
     string Titulo, string Codigo, string Cita, string Enlace, string Lista,
-    string ChromeFondo, string ChromeBorde, string ChromeTexto, string ChromeTenue,
+    string ChromeFondo, string Lateral, string ChromeBorde, string ChromeTexto, string ChromeTenue,
     string ChromeHover, string ChromeActivo, string Acento);
 
 public static class Tema
@@ -15,13 +17,13 @@ public static class Tema
     private static readonly Paleta Clara = new(
         Fondo: "#FFFFFF", Texto: "#1F2328", Tenue: "#8C959F", Seleccion: "#400969DA", LineaActual: "#F6F8FA",
         Titulo: "#0550AE", Codigo: "#953800", Cita: "#59636E", Enlace: "#0969DA", Lista: "#8250DF",
-        ChromeFondo: "#F6F8FA", ChromeBorde: "#D1D9E0", ChromeTexto: "#1F2328", ChromeTenue: "#59636E",
+        ChromeFondo: "#DDE3E9", Lateral: "#EFF2F5", ChromeBorde: "#D1D9E0", ChromeTexto: "#1F2328", ChromeTenue: "#59636E",
         ChromeHover: "#14000000", ChromeActivo: "#24000000", Acento: "#0969DA");
 
     private static readonly Paleta Oscura = new(
-        Fondo: "#0D1117", Texto: "#E6EDF3", Tenue: "#6E7681", Seleccion: "#60388BFD", LineaActual: "#151B23",
+        Fondo: "#1F242B", Texto: "#E6EDF3", Tenue: "#6E7681", Seleccion: "#60388BFD", LineaActual: "#262C34",
         Titulo: "#79C0FF", Codigo: "#FFA657", Cita: "#9198A1", Enlace: "#58A6FF", Lista: "#D2A8FF",
-        ChromeFondo: "#010409", ChromeBorde: "#3D444D", ChromeTexto: "#E6EDF3", ChromeTenue: "#9198A1",
+        ChromeFondo: "#010409", Lateral: "#11161D", ChromeBorde: "#3D444D", ChromeTexto: "#E6EDF3", ChromeTenue: "#9198A1",
         ChromeHover: "#1AFFFFFF", ChromeActivo: "#2AFFFFFF", Acento: "#4493F8");
 
     public static Paleta Actual() => EsOscuro() ? Oscura : Clara;

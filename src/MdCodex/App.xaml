@@ -15,7 +15,8 @@
         <SolidColorBrush x:Key="Chrome.Hover" Color="#1AFFFFFF" />
         <SolidColorBrush x:Key="Chrome.Activo" Color="#2AFFFFFF" />
         <SolidColorBrush x:Key="Acento" Color="#4493F8" />
-        <SolidColorBrush x:Key="Editor.Fondo" Color="#0D1117" />
+        <SolidColorBrush x:Key="Lateral.Fondo" Color="#11161D" />
+        <SolidColorBrush x:Key="Editor.Fondo" Color="#1F242B" />
         <SolidColorBrush x:Key="Estado.Fondo" Color="#0078D4" />
         <SolidColorBrush x:Key="Estado.Texto" Color="#FFFFFF" />
         <SolidColorBrush x:Key="Estado.Hover" Color="#26FFFFFF" />
@@ -212,7 +213,8 @@
             </Setter>
         </Style>
 
-        <!-- Divisores: invisibles hasta pasar el mouse, como en VS Code -->
+        <!-- Divisores: invisibles hasta pasar el mouse; entonces una línea fina al centro, como en VS Code.
+             Toda la franja sigue sirviendo para arrastrar. -->
         <Style x:Key="Divisor" TargetType="GridSplitter">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -220,7 +222,9 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="GridSplitter">
-                        <Border Background="{TemplateBinding Background}" />
+                        <Grid Background="Transparent">
+                            <Border Width="2" HorizontalAlignment="Center" CornerRadius="1" Background="{TemplateBinding Background}" />
+                        </Grid>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
