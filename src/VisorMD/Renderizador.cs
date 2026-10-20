@@ -1,27 +1,66 @@
 using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Windows;
 using Markdig;
 using Markdig.Renderers.Html;
 using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 
 namespace VisorMD;
 
+public sealed record Titulo(string Texto, int Nivel, int Linea)
+{
+    public Thickness Sangria => new((Nivel - 1) * 12, 0, 0, 0);
+}
+
+public sealed record Resultado(string Html, IReadOnlyList<Titulo> Titulos, int Palabras);
+
 // Convierte Markdown en HTML. La página se carga una sola vez (Plantilla) y luego se le envía
 // solo el contenido, así la vista previa no parpadea ni pierde el scroll mientras se escribe.
-public static class Renderizador
+public static partial class Renderizador
 {
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions() // tablas, listas de tareas, notas al pie, ids en títulos, etc.
         .UseEmojiAndSmiley()
         .Build();
 
+    // Una sola pasada da el HTML, los títulos para el esquema y el conteo de palabras.
     // Cada bloque lleva su línea de origen (data-line) para sincronizar el scroll con el editor.
-    public static string Cuerpo(string markdown)
+    public static Resultado Procesar(string markdown)
     {
         var documento = Markdown.Parse(markdown, Pipeline);
+        var titulos = new List<Titulo>();
+        var palabras = 0;
         foreach (var bloque in documento.Descendants<Block>())
+        {
             bloque.GetAttributes().AddProperty("data-line", bloque.Line.ToString(CultureInfo.InvariantCulture));
-        return documento.ToHtml(Pipeline);
+            if (bloque is not LeafBlock { Inline: { } inline })
+                continue;
+
+            var texto = TextoPlano(inline);
+            palabras += Palabra().Count(texto);
+            if (bloque is HeadingBlock titulo)
+                titulos.Add(new Titulo(texto, titulo.Level, titulo.Line));
+        }
+        return new Resultado(documento.ToHtml(Pipeline), titulos, palabras);
     }
+
+    private static string TextoPlano(ContainerInline inline)
+    {
+        var texto = new StringBuilder();
+        foreach (var parte in inline.Descendants())
+        {
+            if (parte is LiteralInline literal)
+                texto.Append(literal.Content);
+            else if (parte is CodeInline codigo)
+                texto.Append(codigo.Content);
+        }
+        return texto.ToString().Trim();
+    }
+
+    [GeneratedRegex(@"[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*")]
+    private static partial Regex Palabra();
 
     public static string Bienvenida() => """
         <div class="vacio">

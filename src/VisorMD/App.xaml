@@ -1,9 +1,204 @@
 ﻿<Application x:Class="VisorMD.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
              ThemeMode="System"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
+        <FontFamily x:Key="Iconos">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
+        <!-- Valores de arranque (tema oscuro); MainWindow.AplicarTema los reemplaza según el tema de Windows. -->
+        <SolidColorBrush x:Key="Chrome.Fondo" Color="#010409" />
+        <SolidColorBrush x:Key="Chrome.Borde" Color="#3D444D" />
+        <SolidColorBrush x:Key="Chrome.Texto" Color="#E6EDF3" />
+        <SolidColorBrush x:Key="Chrome.Tenue" Color="#9198A1" />
+        <SolidColorBrush x:Key="Chrome.Hover" Color="#1AFFFFFF" />
+        <SolidColorBrush x:Key="Chrome.Activo" Color="#2AFFFFFF" />
+        <SolidColorBrush x:Key="Acento" Color="#4493F8" />
+        <SolidColorBrush x:Key="Estado.Fondo" Color="#0078D4" />
+        <SolidColorBrush x:Key="Estado.Texto" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="Estado.Hover" Color="#26FFFFFF" />
+
+        <!-- Botón de ícono (barra de título y encabezados de la barra lateral) -->
+        <Style x:Key="BotonIcono" TargetType="ButtonBase">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Tenue}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontFamily" Value="{StaticResource Iconos}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ButtonBase">
+                        <Border x:Name="Fondo" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AlternarIcono" TargetType="ToggleButton" BasedOn="{StaticResource BotonIcono}">
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Chrome.Activo}" />
+                    <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Menús de texto de la barra de título -->
+        <Style x:Key="BotonMenu" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fondo" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="4">
+                            <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding ContextMenu.IsOpen, RelativeSource={RelativeSource Self}}" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Activo}" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Botones de minimizar, maximizar y cerrar -->
+        <Style x:Key="BotonVentana" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontFamily" Value="{StaticResource Iconos}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Tag" Value="{DynamicResource Chrome.Hover}" />
+            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fondo" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BotonCerrar" TargetType="Button" BasedOn="{StaticResource BotonVentana}">
+            <Setter Property="Tag" Value="#C42B1C" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Íconos de la barra de actividad, con la marca de acento a la izquierda cuando están activos -->
+        <Style x:Key="BotonActividad" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Tenue}" />
+            <Setter Property="FontFamily" Value="{StaticResource Iconos}" />
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="Width" Value="48" />
+            <Setter Property="Height" Value="48" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Grid Background="Transparent">
+                            <Border x:Name="Marca" Width="2" HorizontalAlignment="Left" Background="{DynamicResource Acento}" Visibility="Collapsed" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Elementos de la barra de estado -->
+        <Style x:Key="ItemEstado" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Estado.Texto}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fondo" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Estado.Hover}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Divisores: invisibles hasta pasar el mouse, como en VS Code -->
+        <Style x:Key="Divisor" TargetType="GridSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Border Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Acento}" />
+                </Trigger>
+                <Trigger Property="IsDragging" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Acento}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="EtiquetaTenue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Tenue}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
     </Application.Resources>
 </Application>
