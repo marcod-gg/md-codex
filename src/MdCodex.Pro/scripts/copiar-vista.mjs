@@ -15,6 +15,8 @@ const archivos = [
   ['@highlightjs/cdn-assets/languages/dockerfile.min.js', 'highlight-dockerfile.min.js'],
   ['@highlightjs/cdn-assets/styles/github.min.css', 'highlight-claro.min.css'],
   ['@highlightjs/cdn-assets/styles/github-dark.min.css', 'highlight-oscuro.min.css'],
+  // Diagramas: la vista previa lo carga solo si el documento tiene un bloque ```mermaid (pesa ~5 MB).
+  ['mermaid/dist/mermaid.min.js', 'mermaid.min.js'],
 ];
 
 rmSync(destino, { recursive: true, force: true });

@@ -103,6 +103,7 @@ public static partial class Renderizador
               if (m.base) base.setAttribute('href', m.base); else base.removeAttribute('href');
               main.innerHTML = m.html;
               resaltarCodigo();
+              dibujarDiagramas();
               if (m.scroll != null) scrollTo(0, m.scroll);
             } else if (m.tipo === 'linea') {
               irALinea(m.linea);
@@ -132,8 +133,86 @@ public static partial class Renderizador
           if (window.hljs) hljs.configure({ ignoreUnescapedHTML: true });
           function resaltarCodigo() {
             if (!window.hljs) return;
-            for (const codigo of main.querySelectorAll('pre > code[class*="language-"]:not(.language-mermaid)')) {
+            for (const codigo of main.querySelectorAll('pre > code[class*="language-"]')) {
               try { hljs.highlightElement(codigo); } catch { /* lenguaje desconocido: queda sin color */ }
+            }
+          }
+
+          // Diagramas Mermaid. La librería se carga recién cuando aparece el primer bloque ```mermaid.
+          // Cada SVG se guarda por fuente y tema: al escribir solo se vuelve a dibujar el diagrama que cambió,
+          // y el resto aparece al instante, sin saltos de scroll.
+          const temaOscuro = matchMedia('(prefers-color-scheme: dark)');
+          const diagramas = new Map();
+          let cargaMermaid = null;
+          let numeroDiagrama = 0;
+
+          function cargarMermaid() {
+            return cargaMermaid ??= new Promise((listo, fallo) => {
+              const script = document.createElement('script');
+              script.src = 'https://{{Documentos.HostRecursos}}/mermaid.min.js';
+              script.onload = () => { configurarMermaid(); listo(); };
+              script.onerror = fallo;
+              document.head.appendChild(script);
+            });
+          }
+
+          function configurarMermaid() {
+            mermaid.initialize({
+              startOnLoad: false,
+              securityLevel: 'strict',
+              theme: temaOscuro.matches ? 'dark' : 'default',
+              fontFamily: '"Segoe UI Variable Text", "Segoe UI", sans-serif',
+            });
+          }
+
+          temaOscuro.addEventListener('change', () => {
+            if (!window.mermaid) return;
+            configurarMermaid();
+            for (const div of main.querySelectorAll('.diagrama[data-fuente]')) div.replaceWith(bloqueDeCodigo(div));
+            dibujarDiagramas();
+          });
+
+          // Vuelve a armar el bloque original a partir de un diagrama ya dibujado (como lo genera Markdig).
+          function bloqueDeCodigo(div) {
+            const pre = document.createElement('pre');
+            pre.className = 'mermaid';
+            if (div.dataset.line) pre.dataset.line = div.dataset.line;
+            pre.textContent = div.dataset.fuente;
+            return pre;
+          }
+
+          async function dibujarDiagramas() {
+            // Markdig convierte ```mermaid en <pre class="mermaid">, sin <code> adentro.
+            const bloques = [...main.querySelectorAll('pre.mermaid')];
+            if (bloques.length === 0) return;
+            try { await cargarMermaid(); } catch { return; }
+
+            for (const pre of bloques) {
+              const fuente = pre.textContent;
+              const clave = (temaOscuro.matches ? 'oscuro:' : 'claro:') + fuente;
+              const div = document.createElement('div');
+              div.className = 'diagrama';
+              div.dataset.fuente = fuente;
+              if (pre.dataset.line) div.dataset.line = pre.dataset.line;
+
+              let svg = diagramas.get(clave);
+              if (svg === undefined) {
+                const id = 'diagrama-' + ++numeroDiagrama;
+                try {
+                  await mermaid.parse(fuente);
+                  svg = (await mermaid.render(id, fuente)).svg;
+                  diagramas.set(clave, svg);
+                } catch (error) {
+                  document.getElementById('d' + id)?.remove(); // Mermaid deja restos al fallar
+                  div.classList.add('diagrama-error');
+                  div.textContent = 'Error en el diagrama: ' + (error?.message ?? error);
+                  if (pre.isConnected) pre.after(div); // el código queda visible para corregirlo
+                  continue;
+                }
+              }
+              if (!pre.isConnected) continue; // el contenido cambió mientras se dibujaba
+              div.innerHTML = svg;
+              pre.replaceWith(div);
             }
           }
 
@@ -206,6 +285,11 @@ public static partial class Renderizador
         pre code { background: none; padding: 0; font-size: 100%; }
         /* El tema de highlight.js trae fondo y relleno propios; manda el del bloque. */
         pre code.hljs { background: none; padding: 0; }
+        .diagrama { margin: 0 0 1em; text-align: center; overflow-x: auto; }
+        .diagrama svg { max-width: 100%; height: auto; }
+        .diagrama-error { --error: #d1242f; text-align: left; padding: 10px 14px; border-radius: 8px; font-size: 90%;
+                          color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); white-space: pre-wrap; }
+        @media (prefers-color-scheme: dark) { .diagrama-error { --error: #ff7b72; } }
         kbd { border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 6px; padding: .1em .4em; }
         /* Bordes separados: con border-collapse las esquinas redondeadas no se dibujan. */
         table { border-collapse: separate; border-spacing: 0; display: block; width: max-content; max-width: 100%;
