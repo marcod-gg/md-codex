@@ -1,11 +1,14 @@
 # VisorMD
 
-Visor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebView2 y Markdig.
+Visor y editor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebView2, Markdig y AvalonEdit.
 
 ## Qué hace
 
 - Abre archivos `.md` con **Ctrl+O**, arrastrándolos a la ventana o pasándolos como argumento (sirve para "Abrir con…").
-- Se actualiza solo cada vez que guardas el archivo (**F5** fuerza la recarga).
+- Tres modos: **Vista** (Ctrl+1), **Dividido** con editor y vista previa en vivo (Ctrl+2) y **Editor** (Ctrl+3). En modo dividido la vista sigue el scroll del editor.
+- Editor con resaltado de Markdown y números de línea. Nuevo (Ctrl+N), Guardar (Ctrl+S), Guardar como (Ctrl+Mayús+S), negrita (Ctrl+B) y cursiva (Ctrl+I).
+- Avisa antes de cerrar o abrir otro archivo si hay cambios sin guardar, y conserva la codificación original al guardar.
+- Si el archivo cambia fuera de la app, se recarga solo; si tienes cambios pendientes, pregunta primero. **F5** recarga desde el disco.
 - Sigue el tema claro u oscuro de Windows.
 - Muestra imágenes y enlaces relativos; los enlaces a otros `.md` se abren en el mismo visor y el resto, en la aplicación predeterminada.
 - Soporta tablas, listas de tareas, notas al pie y emojis. Para hacer zoom, usa **Ctrl + rueda del mouse**.

@@ -1,9 +1,12 @@
-using System.Net;
+using System.Globalization;
 using Markdig;
+using Markdig.Renderers.Html;
+using Markdig.Syntax;
 
 namespace VisorMD;
 
-// Convierte Markdown en una página HTML completa, con estilo que sigue el tema claro/oscuro de Windows.
+// Convierte Markdown en HTML. La página se carga una sola vez (Plantilla) y luego se le envía
+// solo el contenido, así la vista previa no parpadea ni pierde el scroll mientras se escribe.
 public static class Renderizador
 {
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
@@ -11,38 +14,57 @@ public static class Renderizador
         .UseEmojiAndSmiley()
         .Build();
 
-    public static string Documento(string markdown, string titulo, string urlBase) =>
-        Pagina(titulo, Markdown.ToHtml(markdown, Pipeline), urlBase);
+    // Cada bloque lleva su línea de origen (data-line) para sincronizar el scroll con el editor.
+    public static string Cuerpo(string markdown)
+    {
+        var documento = Markdown.Parse(markdown, Pipeline);
+        foreach (var bloque in documento.Descendants<Block>())
+            bloque.GetAttributes().AddProperty("data-line", bloque.Line.ToString(CultureInfo.InvariantCulture));
+        return documento.ToHtml(Pipeline);
+    }
 
-    public static string Bienvenida() => Pagina("VisorMD", """
+    public static string Bienvenida() => """
         <div class="vacio">
           <h1>VisorMD</h1>
           <p>Arrastra un archivo <code>.md</code> a esta ventana o presiona <kbd>Ctrl</kbd>+<kbd>O</kbd> para abrir uno.</p>
-          <p class="nota">El documento se actualiza solo cada vez que lo guardas.</p>
+          <p class="nota"><kbd>Ctrl</kbd>+<kbd>N</kbd> crea un documento nuevo · <kbd>Ctrl</kbd>+<kbd>2</kbd> muestra editor y vista lado a lado</p>
         </div>
-        """);
+        """;
 
-    public static string Error(string mensaje) => Pagina("Error", $"""
-        <div class="vacio">
-          <h1>No se pudo leer el archivo</h1>
-          <p>{WebUtility.HtmlEncode(mensaje)}</p>
-        </div>
-        """);
-
-    private static string Pagina(string titulo, string cuerpo, string? urlBase = null) => $$"""
+    public static string Plantilla() => $$"""
         <!doctype html>
         <html lang="es">
         <head>
         <meta charset="utf-8">
-        {{(urlBase is null ? "" : $"<base href=\"{urlBase}\">")}}
-        <title>{{WebUtility.HtmlEncode(titulo)}}</title>
+        <base>
+        <title>VisorMD</title>
         <style>{{Estilo}}</style>
         </head>
         <body>
-        <main>
-        {{cuerpo}}
-        </main>
+        <main></main>
         <script>
+          const main = document.querySelector('main');
+          const base = document.querySelector('base');
+
+          chrome.webview.addEventListener('message', e => {
+            const m = e.data;
+            if (m.tipo === 'html') {
+              if (m.base) base.setAttribute('href', m.base); else base.removeAttribute('href');
+              main.innerHTML = m.html;
+            } else if (m.tipo === 'linea') {
+              irALinea(m.linea);
+            }
+          });
+
+          // Lleva a la vista el último bloque que empieza en o antes de la línea indicada del editor.
+          function irALinea(linea) {
+            let destino = null;
+            for (const el of main.querySelectorAll('[data-line]')) {
+              if (+el.dataset.line <= linea) destino = el; else break;
+            }
+            scrollTo({ top: destino ? destino.getBoundingClientRect().top + scrollY - 16 : 0 });
+          }
+
           // Los enlaces internos (#seccion) se resuelven aquí, sin salir del documento.
           document.addEventListener('click', e => {
             const a = e.target.closest('a[href^="#"]');
