@@ -1,4 +1,4 @@
-# VisorMD
+# Lupa MD
 
 Visor y editor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebView2, Markdig y AvalonEdit.
 
@@ -20,25 +20,25 @@ Visor y editor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebVi
 ## Uso
 
 ```powershell
-dotnet run --project src\VisorMD -- docs\ejemplo.md
+dotnet run --project src\LupaMD -- docs\ejemplo.md
 ```
 
-O, después de compilar con `dotnet build`, ejecutar directamente `src\VisorMD\bin\Debug\net10.0-windows10.0.19041.0\VisorMD.exe` (también se le pueden arrastrar archivos `.md` encima). Hay que cerrar la app antes de volver a compilar, porque Windows bloquea el `.exe` mientras está abierto.
+O, después de compilar con `dotnet build`, ejecutar directamente `src\LupaMD\bin\Debug\net10.0-windows10.0.19041.0\LupaMD.exe` (también se le pueden arrastrar archivos `.md` encima). Hay que cerrar la app antes de volver a compilar, porque Windows bloquea el `.exe` mientras está abierto.
 
 Para generar un ejecutable:
 
 ```powershell
-dotnet publish src\VisorMD -c Release -r win-x64 --self-contained false -o publicar
+dotnet publish src\LupaMD -c Release -r win-x64 --self-contained false -o publicar
 ```
 
 Requiere el runtime de WebView2, que ya viene incluido en Windows 10 y 11.
 
 ### Editor del modo Pro
 
-El editor web vive en `src\VisorMD.Pro` y su compilación ya está incluida en `src\VisorMD\Pro`, así que para compilar la app no hace falta Node.js. Solo si se modifica el editor:
+El editor web vive en `src\LupaMD.Pro` y su compilación ya está incluida en `src\LupaMD\Pro`, así que para compilar la app no hace falta Node.js. Solo si se modifica el editor:
 
 ```powershell
-cd src\VisorMD.Pro
+cd src\LupaMD.Pro
 npm install
-npm run build   # regenera src\VisorMD\Pro
+npm run build   # regenera src\LupaMD\Pro
 ```

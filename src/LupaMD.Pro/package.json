@@ -1,0 +1,21 @@
+{
+  "name": "lupa-md-pro",
+  "version": "1.0.0",
+  "description": "Editor por bloques (modo Pro) de Lupa MD",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@milkdown/crepe": "^7.22.3"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4"
+  }
+}

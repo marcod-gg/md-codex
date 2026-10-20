@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Versión de Windows explícita: WebView2CompositionControl usa las proyecciones del SDK de Windows. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <Product>Lupa MD</Product>
+    <Description>Visor y editor de Markdown para Windows</Description>
+    <Company>skolldev</Company>
+    <Authors>skolldev</Authors>
+    <Copyright>© 2026 skolldev</Copyright>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Recursos\skolldev.png" />
+    <!-- Silueta rellena: a tamaños pequeños el logo de líneas se vuelve una mancha. -->
+    <Resource Include="Recursos\skolldev-silueta.png" />
+  </ItemGroup>
+
+  <!-- Editor por bloques del modo Pro, compilado desde ..\LupaMD.Pro con "npm run build". -->
+  <ItemGroup>
+    <None Include="Pro\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+    <PackageReference Include="Markdig" Version="1.4.2" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+  </ItemGroup>
+
+</Project>
