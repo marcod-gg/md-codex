@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Publicación e instalador (instalador\construir.ps1)
+publicar/

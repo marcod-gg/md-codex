@@ -16,9 +16,12 @@
     <RepositoryUrl>https://github.com/marcod-gg/md-codex</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/marcod-gg/md-codex</PackageProjectUrl>
+    <!-- Generado con marca\generar-icono-app.ps1 -->
+    <ApplicationIcon>Recursos\mdcodex.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Recursos\mdcodex.ico" />
     <Resource Include="Recursos\skolldev.png" />
     <!-- Silueta rellena: a tamaños pequeños el logo de líneas se vuelve una mancha. -->
     <Resource Include="Recursos\skolldev-silueta.png" />

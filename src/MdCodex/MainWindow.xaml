@@ -5,7 +5,7 @@
         xmlns:ae="http://icsharpcode.net/sharpdevelop/avalonedit"
         xmlns:local="clr-namespace:MdCodex"
         Title="MD Codex" Height="820" Width="1320" MinHeight="400" MinWidth="640"
-        WindowStartupLocation="CenterScreen" AllowDrop="True"
+        WindowStartupLocation="CenterScreen" AllowDrop="True" Icon="/Recursos/mdcodex.ico"
         Background="{DynamicResource Chrome.Fondo}" Foreground="{DynamicResource Chrome.Texto}">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="35" ResizeBorderThickness="6" GlassFrameThickness="0"

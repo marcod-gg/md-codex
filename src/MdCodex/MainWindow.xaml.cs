@@ -296,7 +296,7 @@ public partial class MainWindow : Window
         [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".gif"] = "image/gif",
         [".svg"] = "image/svg+xml", [".webp"] = "image/webp", [".bmp"] = "image/bmp", [".ico"] = "image/x-icon",
         [".avif"] = "image/avif", [".mp4"] = "video/mp4", [".webm"] = "video/webm", [".mp3"] = "audio/mpeg",
-        [".css"] = "text/css", [".pdf"] = "application/pdf", [".txt"] = "text/plain; charset=utf-8",
+        [".css"] = "text/css", [".js"] = "text/javascript", [".pdf"] = "application/pdf", [".txt"] = "text/plain; charset=utf-8",
     };
 
     private sealed record Ubicacion(string Host, string Raiz, string Base);
@@ -324,6 +324,9 @@ public partial class MainWindow : Window
             : _carpetasPorHost.GetValueOrDefault(destino.Host);
         if (raiz is null)
             return null;
+        // Las dos rutas pasan por GetFullPath: expande los nombres cortos (MARCOG~1), y si solo una se
+        // expandiera, el archivo parecería estar fuera de la raíz y se negaría.
+        raiz = Path.TrimEndingDirectorySeparator(Path.GetFullPath(raiz));
         var ruta = Path.GetFullPath(Path.Combine(raiz, Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'))));
         return Documentos.EstaDentro(ruta, raiz) ? ruta : null;
     }

@@ -25,13 +25,20 @@ dotnet run --project src\MdCodex -- docs\ejemplo.md
 
 O, después de compilar con `dotnet build`, ejecutar directamente `src\MdCodex\bin\Debug\net10.0-windows10.0.19041.0\MdCodex.exe` (también se le pueden arrastrar archivos `.md` encima). Hay que cerrar la app antes de volver a compilar, porque Windows bloquea el `.exe` mientras está abierto.
 
-Para generar un ejecutable:
+### Instalador
 
 ```powershell
-dotnet publish src\MdCodex -c Release -r win-x64 --self-contained false -o publicar
+.\instalador\construir.ps1   # genera publicar\MDCodex-<versión>-instalador.exe
 ```
 
-Requiere el runtime de WebView2, que ya viene incluido en Windows 10 y 11.
+Publica la app con el runtime de .NET incluido y la empaqueta con [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). El instalador:
+
+- Instala por usuario, sin pedir administrador (o para todos, si se elige en el asistente), con acceso en el menú Inicio y, opcionalmente, en el escritorio.
+- Registra MD Codex en **Abrir con…** para `.md` y `.markdown`. Windows no permite que una app se ponga sola como predeterminada; al terminar ofrece abrir la configuración para elegirla.
+- Avisa si falta el runtime de WebView2 (viene con Windows 11 y con Edge en Windows 10).
+- Requiere Windows 10 versión 2004 o posterior, de 64 bits.
+
+El ícono de la app se genera con `marca\generar-icono-app.ps1`.
 
 ### Editor del modo Pro
 
