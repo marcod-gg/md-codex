@@ -245,14 +245,17 @@
 
                 <GridSplitter x:Name="DivisorLateral" Grid.Column="2" Width="4" Style="{StaticResource Divisor}" />
 
-                <!-- Editor y vista previa -->
-                <Border Grid.Column="3" BorderThickness="1,1,0,0" BorderBrush="{DynamicResource Chrome.Borde}">
-                    <DockPanel>
-                    <!-- Pestañas -->
-                    <ScrollViewer x:Name="DesplazadorPestanas" DockPanel.Dock="Top" Height="35"
+                <!-- Espacio de trabajo: pestañas tipo carpeta de archivador sobre un panel redondeado -->
+                <Grid Grid.Column="3" Margin="0,0,8,8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <!-- Bajan 1 px sobre el borde superior del panel: la pestaña activa lo tapa y se une a él -->
+                    <ScrollViewer x:Name="DesplazadorPestanas" Grid.Row="0" Height="37" Margin="0,0,0,-1" Panel.ZIndex="1"
                                   HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="DesplazadorPestanas_PreviewMouseWheel">
-                        <ItemsControl x:Name="BarraPestanas">
+                        <ItemsControl x:Name="BarraPestanas" Margin="0,3,0,0" VerticalAlignment="Bottom">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <StackPanel Orientation="Horizontal" />
@@ -260,8 +263,9 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type local:Pestana}">
-                                    <Border x:Name="Fondo" Height="35" MinWidth="90" MaxWidth="240" Padding="12,0,6,0"
-                                            Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource Chrome.Borde}"
+                                    <Border x:Name="Fondo" Height="34" MinWidth="90" MaxWidth="240" Padding="12,0,6,0" Margin="0,0,2,0"
+                                            Background="Transparent" CornerRadius="8,8,0,0"
+                                            BorderThickness="1,1,1,0" BorderBrush="Transparent"
                                             ToolTip="{Binding Descripcion}" MouseDown="Pestana_MouseDown">
                                         <Border.ContextMenu>
                                             <ContextMenu>
@@ -274,22 +278,19 @@
                                                 <MenuItem Header="Mostrar en el Explorador de Windows" Click="MenuMostrarEnCarpeta_Click" IsEnabled="{Binding TieneRuta}" />
                                             </ContextMenu>
                                         </Border.ContextMenu>
-                                        <Grid>
-                                            <Border x:Name="Marca" Height="2" VerticalAlignment="Top" Margin="-12,0,-6,0"
-                                                    Background="{DynamicResource Acento}" Visibility="Collapsed" />
-                                            <DockPanel>
-                                                <Button x:Name="Cerrar" DockPanel.Dock="Right" Style="{StaticResource BotonCerrarPestana}"
-                                                        Margin="6,0,0,0" Opacity="0" Click="CerrarPestana_Click" ToolTip="Cerrar (Ctrl+W)" />
-                                                <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Iconos}" FontSize="13" Margin="0,0,6,0"
-                                                           VerticalAlignment="Center" Foreground="{DynamicResource Acento}" />
-                                                <TextBlock x:Name="Nombre" Text="{Binding Nombre}" FontSize="13" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Chrome.Tenue}" />
-                                            </DockPanel>
-                                        </Grid>
+                                        <DockPanel>
+                                            <Button x:Name="Cerrar" DockPanel.Dock="Right" Style="{StaticResource BotonCerrarPestana}"
+                                                    Margin="6,0,0,0" Opacity="0" Click="CerrarPestana_Click" ToolTip="Cerrar (Ctrl+W)" />
+                                            <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Iconos}" FontSize="13" Margin="0,0,6,0"
+                                                       VerticalAlignment="Center" Foreground="{DynamicResource Acento}" />
+                                            <TextBlock x:Name="Nombre" Text="{Binding Nombre}" FontSize="13" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Chrome.Tenue}" />
+                                        </DockPanel>
                                     </Border>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsMouseOver, ElementName=Fondo}" Value="True">
                                             <Setter TargetName="Cerrar" Property="Opacity" Value="1" />
+                                            <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Modificado}" Value="True">
                                             <Setter TargetName="Cerrar" Property="Opacity" Value="1" />
@@ -299,7 +300,7 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding EsActiva}" Value="True">
                                             <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Editor.Fondo}" />
-                                            <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
+                                            <Setter TargetName="Fondo" Property="BorderBrush" Value="{DynamicResource Chrome.Borde}" />
                                             <Setter TargetName="Nombre" Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
                                             <Setter TargetName="Cerrar" Property="Opacity" Value="1" />
                                         </DataTrigger>
@@ -308,7 +309,9 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                    <Grid>
+                    <Border x:Name="Tarjeta" Grid.Row="1" CornerRadius="8" BorderThickness="1"
+                            BorderBrush="{DynamicResource Chrome.Borde}" Background="{DynamicResource Editor.Fondo}">
+                    <Grid x:Name="AreaTrabajo">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="ColumnaEditor" Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -317,15 +320,16 @@
                         <ae:TextEditor x:Name="Editor" Grid.Column="0" FontFamily="Cascadia Mono, Consolas" FontSize="14"
                                        ShowLineNumbers="True" WordWrap="True" Padding="6,4" />
                         <GridSplitter x:Name="Divisor" Grid.Column="1" Width="4" Style="{StaticResource Divisor}" />
-                        <wv2:WebView2 x:Name="Visor" Grid.Column="2" />
+                        <!-- Control de composición: se dibuja dentro de WPF, así respeta las esquinas redondeadas del panel -->
+                        <wv2:WebView2CompositionControl x:Name="Visor" Grid.Column="2" />
                     </Grid>
-                    </DockPanel>
-                </Border>
+                    </Border>
+                </Grid>
             </Grid>
 
             <!-- ===== Barra de estado ===== -->
             <Grid Grid.Row="2" Background="{DynamicResource Estado.Fondo}">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="4,0,0,0">
                     <Button Style="{StaticResource ItemEstado}" Command="{x:Static local:Comandos.AbrirCarpeta}" ToolTip="Abrir carpeta…">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource Iconos}" Margin="0,0,6,0" VerticalAlignment="Center" />

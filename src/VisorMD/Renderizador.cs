@@ -171,16 +171,20 @@ public static partial class Renderizador
         p, ul, ol, blockquote, pre, table { margin: 0 0 1em; }
         a { color: var(--enlace); text-decoration: none; }
         a:hover { text-decoration: underline; }
-        img { max-width: 100%; }
+        img { max-width: 100%; border-radius: 8px; }
         hr { border: 0; height: 1px; background: var(--borde); margin: 1.5em 0; }
         blockquote { padding: 0 1em; color: var(--cita); border-left: .25em solid var(--borde); }
         code, kbd, pre { font-family: "Cascadia Code", Consolas, monospace; font-size: 85%; }
         code { background: var(--codigo); padding: .2em .4em; border-radius: 6px; }
-        pre { background: var(--codigo); padding: 16px; border-radius: 6px; overflow: auto; line-height: 1.45; }
+        pre { background: var(--codigo); padding: 16px; border-radius: 8px; overflow: auto; line-height: 1.45; }
         pre code { background: none; padding: 0; font-size: 100%; }
-        kbd { border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 4px; padding: .1em .4em; }
-        table { border-collapse: collapse; display: block; overflow: auto; }
-        th, td { border: 1px solid var(--borde); padding: 6px 13px; }
+        kbd { border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 6px; padding: .1em .4em; }
+        /* Bordes separados: con border-collapse las esquinas redondeadas no se dibujan. */
+        table { border-collapse: separate; border-spacing: 0; display: block; width: max-content; max-width: 100%;
+                overflow: auto; border: 1px solid var(--borde); border-radius: 8px; }
+        th, td { border: 0; border-right: 1px solid var(--borde); border-bottom: 1px solid var(--borde); padding: 6px 13px; }
+        th:last-child, td:last-child { border-right: 0; }
+        tr:last-child td { border-bottom: 0; }
         th { font-weight: 600; background: var(--codigo); }
         ul.contains-task-list { list-style: none; padding-left: 1.2em; }
         .task-list-item input { margin: 0 .4em 0 -1.2em; }

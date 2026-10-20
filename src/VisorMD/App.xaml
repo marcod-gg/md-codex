@@ -134,14 +134,18 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
                         <Grid Background="Transparent">
-                            <Border x:Name="Marca" Width="2" HorizontalAlignment="Left" Background="{DynamicResource Acento}" Visibility="Collapsed" />
+                            <Border x:Name="Fondo" Margin="6,4" CornerRadius="8" Background="Transparent" />
+                            <Border x:Name="Marca" Width="3" Height="18" CornerRadius="1.5" HorizontalAlignment="Left"
+                                    Background="{DynamicResource Acento}" Visibility="Collapsed" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
                                 <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
                                 <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
                                 <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
                             </Trigger>
@@ -189,12 +193,13 @@
             <Setter Property="Foreground" Value="{DynamicResource Estado.Texto}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Padding" Value="7,0" />
+            <Setter Property="Margin" Value="1,2" />
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Fondo" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Fondo" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="4">
                             <ContentPresenter VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>

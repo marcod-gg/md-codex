@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
@@ -67,11 +66,6 @@ public sealed class Pestana : INotifyPropertyChanged, IDisposable
     public int Cursor { get; set; }
     public double ScrollEditor { get; set; }
     public double ScrollVista { get; set; }
-
-    // Host virtual de la carpeta del archivo; uno por carpeta evita que el caché mezcle imágenes.
-    public string? Host => Ruta is null
-        ? null
-        : $"d{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Carpeta!.ToUpperInvariant())))[..16]}.visormd";
 
     public string? Carpeta => Ruta is null ? null : Path.GetDirectoryName(Ruta);
 
@@ -155,7 +149,6 @@ public sealed class Pestana : INotifyPropertyChanged, IDisposable
         Avisar(nameof(Nombre));
         Avisar(nameof(Descripcion));
         Avisar(nameof(TieneRuta));
-        Avisar(nameof(Host));
     }
 
     private void Cambiar(ref bool campo, bool valor, string propiedad)

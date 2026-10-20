@@ -22,7 +22,7 @@ Visor y editor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebVi
 dotnet run --project src\VisorMD -- docs\ejemplo.md
 ```
 
-O, después de compilar con `dotnet build`, ejecutar directamente `src\VisorMD\bin\Debug\net10.0-windows\VisorMD.exe` (también se le pueden arrastrar archivos `.md` encima). Hay que cerrar la app antes de volver a compilar, porque Windows bloquea el `.exe` mientras está abierto.
+O, después de compilar con `dotnet build`, ejecutar directamente `src\VisorMD\bin\Debug\net10.0-windows10.0.19041.0\VisorMD.exe` (también se le pueden arrastrar archivos `.md` encima). Hay que cerrar la app antes de volver a compilar, porque Windows bloquea el `.exe` mientras está abierto.
 
 Para generar un ejecutable:
 

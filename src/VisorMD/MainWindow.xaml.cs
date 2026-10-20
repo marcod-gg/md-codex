@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
@@ -25,7 +26,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<Pestana> _pestanas = [];
     // Documento vacío que muestra el editor cuando no hay pestañas abiertas.
     private readonly TextDocument _sinDocumento = new();
-    private readonly HashSet<string> _hostsMapeados = [];
+    // Host virtual de cada carpeta de documento → carpeta en disco, para servir sus imágenes.
+    private readonly Dictionary<string, string> _carpetasPorHost = new(StringComparer.OrdinalIgnoreCase);
     private Pestana? _activa;
     private string? _carpetaRaiz;
     private Modo _modo = Modo.Vista;
@@ -59,6 +61,8 @@ public partial class MainWindow : Window
         PreviewDragOver += Ventana_PreviewDragOver;
         PreviewDrop += Ventana_PreviewDrop;
         StateChanged += (_, _) => AjustarMaximizado();
+        SourceInitialized += (_, _) => Nativo.RedondearEsquinas(new WindowInteropHelper(this).Handle);
+        AreaTrabajo.SizeChanged += (_, _) => RecortarAreaTrabajo();
 
         AplicarTema();
         SystemEvents.UserPreferenceChanged += AlCambiarPreferencias;
@@ -88,6 +92,11 @@ public partial class MainWindow : Window
         // Sin atajos del navegador: F5, Ctrl+W, etc. llegan a la ventana y no recargan la plantilla.
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
         core.NavigationStarting += Visor_NavigationStarting;
+        // Imágenes y otros archivos relativos al documento. Se sirven a mano y no con
+        // SetVirtualHostNameToFolderMapping, porque esa asignación solo vale para páginas cargadas
+        // después de hacerla, y la plantilla se carga una sola vez.
+        core.AddWebResourceRequestedFilter("https://*.visormd/*", CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested += (_, e) => e.Response = ServirArchivo(entorno, e.Request.Uri);
         core.NavigationCompleted += (_, _) =>
         {
             _vistaLista = true;
@@ -127,15 +136,16 @@ public partial class MainWindow : Window
         if (!_vistaLista || (p is not null && _modo == Modo.Editor))
             return;
 
-        if (p?.Host is { } host && _hostsMapeados.Add(host))
-            Visor.CoreWebView2.SetVirtualHostNameToFolderMapping(host, p.Carpeta!, CoreWebView2HostResourceAccessKind.Allow);
+        var ubicacion = p is null ? null : Ubicar(p);
+        if (ubicacion is not null)
+            _carpetasPorHost[ubicacion.Host] = ubicacion.Raiz;
 
         Enviar(new
         {
             tipo = "html",
             id = p?.Id ?? 0,
             html = resultado?.Html ?? Renderizador.Bienvenida(),
-            @base = p?.Host is { } h ? $"https://{h}/" : null,
+            @base = ubicacion?.Base,
             scroll = _restaurarScrollVista ? p?.ScrollVista : null,
         });
         _restaurarScrollVista = false;
@@ -153,6 +163,59 @@ public partial class MainWindow : Window
     }
 
     private void Enviar(object mensaje) => Visor.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(mensaje));
+
+    private static readonly Dictionary<string, string> TiposMime = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".gif"] = "image/gif",
+        [".svg"] = "image/svg+xml", [".webp"] = "image/webp", [".bmp"] = "image/bmp", [".ico"] = "image/x-icon",
+        [".avif"] = "image/avif", [".mp4"] = "video/mp4", [".webm"] = "video/webm", [".mp3"] = "audio/mpeg",
+        [".css"] = "text/css", [".pdf"] = "application/pdf", [".txt"] = "text/plain; charset=utf-8",
+    };
+
+    private sealed record Ubicacion(string Host, string Raiz, string Base);
+
+    // La raíz virtual de un documento es la carpeta abierta en el Explorador si el documento está dentro
+    // de ella, o su propia carpeta si no. La URL base incluye la ruta del documento bajo esa raíz, así
+    // funcionan rutas como ../img/x.png sin dar acceso a nada fuera de la raíz.
+    private Ubicacion? Ubicar(Pestana p)
+    {
+        if (p.Carpeta is not { } carpeta)
+            return null;
+        var raiz = _carpetaRaiz is not null && Documentos.EstaDentro(carpeta, _carpetaRaiz) ? _carpetaRaiz : carpeta;
+        var relativa = Path.GetRelativePath(raiz, carpeta);
+        var camino = relativa == "." ? "" : string.Join('/', relativa.Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString)) + "/";
+        var host = Documentos.HostPara(raiz);
+        return new Ubicacion(host, raiz, $"https://{host}/{camino}");
+    }
+
+    // Traduce una URL virtual a un archivo dentro de su raíz; null si no corresponde o se sale de ella.
+    private string? RutaLocal(Uri destino)
+    {
+        if (!_carpetasPorHost.TryGetValue(destino.Host, out var raiz))
+            return null;
+        var ruta = Path.GetFullPath(Path.Combine(raiz, Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'))));
+        return Documentos.EstaDentro(ruta, raiz) ? ruta : null;
+    }
+
+    private CoreWebView2WebResourceResponse ServirArchivo(CoreWebView2Environment entorno, string uri)
+    {
+        CoreWebView2WebResourceResponse NoEncontrado() => entorno.CreateWebResourceResponse(null, 404, "Not Found", "");
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var destino) || RutaLocal(destino) is not { } ruta || !File.Exists(ruta))
+            return NoEncontrado();
+
+        try
+        {
+            var flujo = new FileStream(ruta, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var tipo = TiposMime.GetValueOrDefault(Path.GetExtension(ruta), "application/octet-stream");
+            // Sin caché: si la imagen cambia en disco, la vista previa muestra la nueva al actualizarse.
+            return entorno.CreateWebResourceResponse(flujo, 200, "OK", $"Content-Type: {tipo}\r\nCache-Control: no-store");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return NoEncontrado();
+        }
+    }
 
     // La página avisa dónde quedó su scroll; se guarda en la pestaña a la que pertenece.
     private void Visor_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -206,8 +269,8 @@ public partial class MainWindow : Window
         string? local = null;
         if (destino.IsFile)
             local = destino.LocalPath;
-        else if (_activa?.Carpeta is { } carpeta && destino.Host.Equals(_activa.Host, StringComparison.OrdinalIgnoreCase))
-            local = Path.GetFullPath(Path.Combine(carpeta, Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'))));
+        else if (destino.Host.EndsWith(".visormd", StringComparison.OrdinalIgnoreCase))
+            local = RutaLocal(destino);
 
         if (local is not null && Directory.Exists(local))
         {
@@ -562,12 +625,44 @@ public partial class MainWindow : Window
         Visor.Visibility = Visible(conVista);
         Divisor.Visibility = Visible(conEditor && conVista);
         DesplazadorPestanas.Visibility = Visible(hayDocumento);
+        // Con pestañas, la esquina superior izquierda queda recta para que la primera pestaña calce como en una carpeta.
+        Tarjeta.CornerRadius = hayDocumento ? new CornerRadius(0, 8, 8, 8) : new CornerRadius(8);
+        RecortarAreaTrabajo();
 
         EstadoPosicion.Visibility = Visible(conEditor);
         EstadoPalabras.Visibility = Visible(hayDocumento);
         EstadoCodificacion.Visibility = Visible(hayDocumento);
         EstadoFinLinea.Visibility = Visible(hayDocumento);
         EstadoLenguaje.Visibility = Visible(hayDocumento);
+    }
+
+    // Border no recorta su contenido: sin esto, el editor y la vista se saldrían por las esquinas redondeadas.
+    private void RecortarAreaTrabajo()
+    {
+        var tamano = new Size(AreaTrabajo.ActualWidth, AreaTrabajo.ActualHeight);
+        var r = Tarjeta.CornerRadius;
+        var grosor = Tarjeta.BorderThickness.Left;
+        AreaTrabajo.Clip = RectanguloRedondeado(tamano, Math.Max(0, r.TopLeft - grosor), Math.Max(0, r.TopRight - grosor),
+            Math.Max(0, r.BottomRight - grosor), Math.Max(0, r.BottomLeft - grosor));
+    }
+
+    private static Geometry RectanguloRedondeado(Size t, double si, double sd, double id, double ii)
+    {
+        var figura = new StreamGeometry();
+        using (var g = figura.Open())
+        {
+            g.BeginFigure(new Point(si, 0), isFilled: true, isClosed: true);
+            g.LineTo(new Point(t.Width - sd, 0), false, false);
+            g.ArcTo(new Point(t.Width, sd), new Size(sd, sd), 0, false, SweepDirection.Clockwise, false, false);
+            g.LineTo(new Point(t.Width, t.Height - id), false, false);
+            g.ArcTo(new Point(t.Width - id, t.Height), new Size(id, id), 0, false, SweepDirection.Clockwise, false, false);
+            g.LineTo(new Point(ii, t.Height), false, false);
+            g.ArcTo(new Point(0, t.Height - ii), new Size(ii, ii), 0, false, SweepDirection.Clockwise, false, false);
+            g.LineTo(new Point(0, si), false, false);
+            g.ArcTo(new Point(si, 0), new Size(si, si), 0, false, SweepDirection.Clockwise, false, false);
+        }
+        figura.Freeze();
+        return figura;
     }
 
     // Envuelve la selección con la marca (o la inserta vacía con el cursor al medio).
