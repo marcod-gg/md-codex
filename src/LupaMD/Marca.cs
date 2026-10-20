@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -8,6 +9,14 @@ namespace LupaMD;
 public static class Marca
 {
     public const string Desarrollador = "skolldev";
+
+    public const string Repositorio = "https://github.com/marcod-gg/lupa-md";
+    public const string RepositorioCorto = "github.com/marcod-gg/lupa-md";
+    public const string NuevoProblema = Repositorio + "/issues/new";
+    // Hyperlink.NavigateUri exige un Uri; con el texto, la ventana falla al cargarse.
+    public static readonly Uri RepositorioUri = new(Repositorio);
+
+    public static void Abrir(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
     // El logo es trazo negro sobre fondo transparente: se usa como máscara y se pinta con el color del tema.
     public static readonly Uri Logo = new("pack://application:,,,/Recursos/skolldev.png");

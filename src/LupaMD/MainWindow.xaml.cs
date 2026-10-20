@@ -1122,6 +1122,10 @@ public partial class MainWindow : Window
 
     private void AcercaDe_Click(object sender, RoutedEventArgs e) => new AcercaDe { Owner = this }.ShowDialog();
 
+    private void Repositorio_Click(object sender, RoutedEventArgs e) => Marca.Abrir(Marca.Repositorio);
+
+    private void InformarProblema_Click(object sender, RoutedEventArgs e) => Marca.Abrir(Marca.NuevoProblema);
+
     private void Minimizar_Click(object sender, RoutedEventArgs e) => SystemCommands.MinimizeWindow(this);
 
     private void Maximizar_Click(object sender, RoutedEventArgs e)

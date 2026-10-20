@@ -70,7 +70,7 @@ public static partial class Renderizador
         </div>
         <footer class="marca">
           <span class="lobo" style="--logo: url({Marca.LogoDataUri})"></span>
-          <span>Desarrollado por <strong>{Marca.Desarrollador}</strong></span>
+          <span>Desarrollado por <strong>{Marca.Desarrollador}</strong> · <a href="{Marca.Repositorio}">GitHub</a></span>
         </footer>
         """;
 

@@ -39,6 +39,12 @@
             </TextBlock>
             <TextBlock x:Name="TextoCopyright" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0"
                        Foreground="{DynamicResource Chrome.Tenue}" />
+            <TextBlock HorizontalAlignment="Center" FontSize="12" Margin="0,10,0,0">
+                <Hyperlink NavigateUri="{x:Static local:Marca.RepositorioUri}" RequestNavigate="Enlace_RequestNavigate"
+                           Foreground="{DynamicResource Acento}" TextDecorations="None" ToolTip="{x:Static local:Marca.Repositorio}">
+                    <Run Text="{x:Static local:Marca.RepositorioCorto}" />
+                </Hyperlink>
+            </TextBlock>
             <Button Content="Cerrar" Click="Cerrar_Click" IsDefault="True" IsCancel="True"
                     HorizontalAlignment="Center" MinWidth="110" Margin="0,24,0,0" />
         </StackPanel>

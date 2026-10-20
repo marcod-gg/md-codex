@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Navigation;
 
 namespace LupaMD;
 
@@ -23,4 +24,10 @@ public partial class AcercaDe : Window
     }
 
     private void Cerrar_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Enlace_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        Marca.Abrir(e.Uri.AbsoluteUri);
+        e.Handled = true;
+    }
 }

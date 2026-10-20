@@ -42,3 +42,12 @@ cd src\LupaMD.Pro
 npm install
 npm run build   # regenera src\LupaMD\Pro
 ```
+
+## Repositorio
+
+- Código: [github.com/marcod-gg/lupa-md](https://github.com/marcod-gg/lupa-md)
+- Problemas y sugerencias: [issues](https://github.com/marcod-gg/lupa-md/issues)
+
+---
+
+Desarrollado por **skolldev**.

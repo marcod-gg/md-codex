@@ -135,6 +135,9 @@
                     <Button Style="{StaticResource BotonMenu}" Content="A_yuda" Click="AbrirMenu_Click">
                         <Button.ContextMenu>
                             <ContextMenu>
+                                <MenuItem Header="_Repositorio en GitHub" Click="Repositorio_Click" />
+                                <MenuItem Header="_Informar un problema…" Click="InformarProblema_Click" />
+                                <Separator />
                                 <MenuItem Header="_Acerca de Lupa MD" Click="AcercaDe_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
