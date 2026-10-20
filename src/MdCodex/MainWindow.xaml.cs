@@ -439,6 +439,9 @@ public partial class MainWindow : Window
                 case "cambio":
                     AplicarDesdePro(raiz);
                     break;
+                case "elegirImagen":
+                    ElegirImagenes();
+                    break;
             }
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
@@ -486,6 +489,85 @@ public partial class MainWindow : Window
         while (fin < limite - inicio && actual[actual.Length - 1 - fin] == markdown[markdown.Length - 1 - fin])
             fin++;
         pestana.Documento.Replace(inicio, actual.Length - inicio - fin, markdown.Substring(inicio, markdown.Length - inicio - fin));
+    }
+
+    // ---------- Imágenes en el modo Pro ----------
+
+    private const string AvisoSinGuardar =
+        "Guarda el documento antes de agregar imágenes: se guardan junto a él, en la carpeta «imagenes».";
+
+    private void ElegirImagenes()
+    {
+        if (_activa?.Carpeta is null)
+        {
+            Avisar(AvisoSinGuardar);
+            return;
+        }
+        var dialogo = new OpenFileDialog { Title = "Insertar imagen", Filter = Imagenes.Filtro, Multiselect = true };
+        if (dialogo.ShowDialog(this) == true)
+            AgregarImagenes(dialogo.FileNames, null);
+    }
+
+    // La primera imagen va donde se soltó (si se arrastró); las demás, a continuación.
+    private void AgregarImagenes(IReadOnlyList<string> archivos, Point? posicion)
+    {
+        if (_activa is not { Carpeta: { } carpeta } pestana)
+        {
+            Avisar(AvisoSinGuardar);
+            return;
+        }
+        foreach (var archivo in archivos.Where(Imagenes.EsImagen))
+        {
+            try
+            {
+                EnviarImagen(pestana, Imagenes.Incorporar(carpeta, archivo), Path.GetFileNameWithoutExtension(archivo), posicion);
+                posicion = null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                Avisar($"No se pudo agregar la imagen:\n{ex.Message}");
+            }
+        }
+    }
+
+    // Devuelve true si el portapapeles tenía una imagen (y se atendió); false para que la página pegue lo demás.
+    private bool PegarImagen()
+    {
+        try
+        {
+            if (Clipboard.ContainsFileDropList())
+            {
+                var archivos = Clipboard.GetFileDropList().Cast<string>().Where(Imagenes.EsImagen).ToList();
+                if (archivos.Count == 0)
+                    return false;
+                AgregarImagenes(archivos, null);
+                return true;
+            }
+            // Solo la imagen sola (una captura). Si viene con texto o HTML (copiada de una página),
+            // la pega el editor, que conserva el enlace original.
+            if (!Clipboard.ContainsImage() || Clipboard.ContainsText() || Clipboard.GetImage() is not { } imagen)
+                return false;
+            if (_activa is not { Carpeta: { } carpeta } pestana)
+            {
+                Avisar(AvisoSinGuardar);
+                return true;
+            }
+            EnviarImagen(pestana, Imagenes.IncorporarPortapapeles(carpeta, imagen), "imagen pegada", null);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.ExternalException)
+        {
+            Avisar($"No se pudo pegar la imagen:\n{ex.Message}");
+            return true;
+        }
+    }
+
+    private void EnviarImagen(Pestana pestana, string ruta, string alt, Point? posicion)
+    {
+        // Las coordenadas de la página son píxeles CSS: los de WPF divididos por el zoom de la vista.
+        var zoom = VisorPro.ZoomFactor > 0 ? VisorPro.ZoomFactor : 1;
+        EnviarPro(new { tipo = "insertarImagen", id = pestana.Id, ruta, alt, x = posicion?.X / zoom, y = posicion?.Y / zoom });
+        RefrescarArbol();
     }
 
     // Ejecuta una acción después de traer lo pendiente del editor Pro.
@@ -1125,6 +1207,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Pegar una imagen en el modo Pro: la guarda la app junto al documento (la página no puede escribir en disco).
+        if (VisorPro.IsKeyboardFocusWithin && e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && PegarImagen())
+        {
+            e.Handled = true;
+            return;
+        }
+
         // Las vistas web se quedan con las teclas: los atajos de la ventana se atienden aquí antes.
         // Los que no aplican (Ctrl+B o Ctrl+I fuera del editor de texto) siguen hacia la página.
         if (Visor.IsKeyboardFocusWithin || VisorPro.IsKeyboardFocusWithin)
@@ -1151,11 +1240,21 @@ public partial class MainWindow : Window
     }
 
     // Las carpetas arrastradas se abren en el Explorador; los archivos, cada uno en su pestaña.
+    // Las imágenes soltadas sobre el editor Pro se insertan en el documento, donde se soltaron.
     private void Ventana_PreviewDrop(object sender, DragEventArgs e)
     {
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] { Length: > 0 } rutas)
             return;
         e.Handled = true;
+        if (_modo == Modo.Pro && VisorPro.IsVisible && rutas.All(Imagenes.EsImagen))
+        {
+            var punto = e.GetPosition(VisorPro);
+            if (punto.X >= 0 && punto.Y >= 0 && punto.X < VisorPro.ActualWidth && punto.Y < VisorPro.ActualHeight)
+            {
+                AgregarImagenes(rutas, punto);
+                return;
+            }
+        }
         foreach (var ruta in rutas)
         {
             if (Directory.Exists(ruta))

@@ -1,8 +1,10 @@
 // Editor "Pro" de MD Codex: edición por bloques al estilo de Notion sobre Milkdown Crepe.
 // La app es la dueña del documento: le envía el Markdown a cargar y recibe los cambios.
 import { Crepe } from '@milkdown/crepe';
-import { remarkStringifyOptionsCtx } from '@milkdown/kit/core';
+import { commandsCtx, editorViewCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core';
+import { clearTextInCurrentBlockCommand } from '@milkdown/kit/preset/commonmark';
 import { remarkGFMPlugin } from '@milkdown/kit/preset/gfm';
+import { TextSelection } from '@milkdown/kit/prose/state';
 import { replaceAll } from '@milkdown/kit/utils';
 // Las partes del tema que se usan; latex.css se omite porque arrastra ~1 MB de fuentes de KaTeX.
 import '@milkdown/crepe/theme/common/prosemirror.css';
@@ -33,6 +35,47 @@ const baseDocumento = document.head.appendChild(document.createElement('base'));
 function fijarBase(url) {
   if (url) baseDocumento.setAttribute('href', url);
   else baseDocumento.removeAttribute('href');
+}
+
+const iconoImagen = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m20 16-4.5-4.5L7 19.5"/></svg>';
+const iconoEnlace = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>';
+
+// Imágenes en el menú «/». Los archivos los copia la app junto al documento (la página no puede
+// escribir en disco) y luego le pide al editor que inserte la imagen con «insertarImagen».
+function agregarImagenesAlMenu(builder) {
+  const avanzado = builder.getGroup('advanced');
+  avanzado.addItem('imagen', {
+    label: 'Imagen',
+    icon: iconoImagen,
+    onRun: ctx => {
+      ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+      anfitrion?.postMessage({ tipo: 'elegirImagen', id: pestana });
+    },
+  });
+  avanzado.addItem('imagen-url', {
+    label: 'Imagen desde URL',
+    icon: iconoEnlace,
+    onRun: ctx => {
+      ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+      const url = prompt('Dirección o ruta de la imagen:');
+      if (url?.trim()) insertarImagen({ ruta: url.trim(), alt: prompt('Texto alternativo (describe la imagen):') ?? '' });
+    },
+  });
+}
+
+// Inserta una imagen normal de Markdown en el cursor o, si viene una posición (arrastrar y soltar), ahí.
+function insertarImagen({ ruta, alt = '', x, y }) {
+  crepe.editor.action(ctx => {
+    const vista = ctx.get(editorViewCtx);
+    let tr = vista.state.tr;
+    if (x != null && y != null) {
+      const destino = vista.posAtCoords({ left: x, top: y });
+      if (destino) tr = tr.setSelection(TextSelection.near(tr.doc.resolve(destino.pos)));
+    }
+    const imagen = vista.state.schema.nodes.image.create({ src: ruta, alt, title: '' });
+    vista.dispatch(tr.replaceSelectionWith(imagen, false).scrollIntoView());
+    vista.focus();
+  });
 }
 
 const crepe = new Crepe({
@@ -70,6 +113,7 @@ const crepe = new Crepe({
         table: { label: 'Tabla' },
         math: null,
       },
+      buildMenu: agregarImagenesAlMenu,
     },
     [Crepe.Feature.Toolbar]: {
       boldLabel: 'Negrita', italicLabel: 'Cursiva', strikethroughLabel: 'Tachado',
@@ -135,6 +179,7 @@ anfitrion?.addEventListener('message', e => {
   if (m.tipo === 'cargar') cargar(m);
   else if (m.tipo === 'titulo') irATitulo(m.indice);
   else if (m.tipo === 'enfocar') raiz.querySelector('.ProseMirror')?.focus();
+  else if (m.tipo === 'insertarImagen' && m.id === pestana) insertarImagen(m);
 });
 
 await crepe.create();
