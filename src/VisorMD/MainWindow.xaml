@@ -14,8 +14,13 @@
     <Window.CommandBindings>
         <CommandBinding Command="New" Executed="Nuevo_Executed" />
         <CommandBinding Command="Open" Executed="Abrir_Executed" />
-        <CommandBinding Command="Save" Executed="Guardar_Executed" />
-        <CommandBinding Command="SaveAs" Executed="GuardarComo_Executed" />
+        <CommandBinding Command="Save" Executed="Guardar_Executed" CanExecute="HayPestana_CanExecute" />
+        <CommandBinding Command="SaveAs" Executed="GuardarComo_Executed" CanExecute="HayPestana_CanExecute" />
+        <CommandBinding Command="{x:Static local:Comandos.GuardarTodo}" Executed="GuardarTodo_Executed" CanExecute="HayPestana_CanExecute" />
+        <CommandBinding Command="{x:Static local:Comandos.CerrarPestana}" Executed="CerrarPestana_Executed" CanExecute="HayPestana_CanExecute" />
+        <CommandBinding Command="{x:Static local:Comandos.CerrarTodas}" Executed="CerrarTodas_Executed" CanExecute="HayPestana_CanExecute" />
+        <CommandBinding Command="{x:Static local:Comandos.PestanaSiguiente}" Executed="PestanaSiguiente_Executed" CanExecute="HayPestana_CanExecute" />
+        <CommandBinding Command="{x:Static local:Comandos.PestanaAnterior}" Executed="PestanaAnterior_Executed" CanExecute="HayPestana_CanExecute" />
         <CommandBinding Command="Close" Executed="Cerrar_Click" />
         <CommandBinding Command="Refresh" Executed="Recargar_Executed" CanExecute="HayArchivo_CanExecute" />
         <CommandBinding Command="{x:Static local:Comandos.AbrirCarpeta}" Executed="AbrirCarpeta_Executed" />
@@ -34,6 +39,10 @@
         <KeyBinding Key="S" Modifiers="Control" Command="Save" />
         <KeyBinding Key="S" Modifiers="Control+Shift" Command="SaveAs" />
         <KeyBinding Key="F5" Command="Refresh" />
+        <KeyBinding Key="W" Modifiers="Control" Command="{x:Static local:Comandos.CerrarPestana}" />
+        <KeyBinding Key="F4" Modifiers="Control" Command="{x:Static local:Comandos.CerrarPestana}" />
+        <KeyBinding Key="PageDown" Modifiers="Control" Command="{x:Static local:Comandos.PestanaSiguiente}" />
+        <KeyBinding Key="PageUp" Modifiers="Control" Command="{x:Static local:Comandos.PestanaAnterior}" />
         <KeyBinding Key="D1" Modifiers="Control" Command="{x:Static local:Comandos.ModoVista}" />
         <KeyBinding Key="D2" Modifiers="Control" Command="{x:Static local:Comandos.ModoDividido}" />
         <KeyBinding Key="D3" Modifiers="Control" Command="{x:Static local:Comandos.ModoEditor}" />
@@ -76,6 +85,10 @@
                         <Separator />
                         <MenuItem Header="_Guardar" Command="Save" InputGestureText="Ctrl+S" />
                         <MenuItem Header="Guardar _como…" Command="SaveAs" InputGestureText="Ctrl+Mayús+S" />
+                        <MenuItem Header="Guardar _todo" Command="{x:Static local:Comandos.GuardarTodo}" />
+                        <Separator />
+                        <MenuItem Header="Cerrar _pestaña" Command="{x:Static local:Comandos.CerrarPestana}" InputGestureText="Ctrl+W" />
+                        <MenuItem Header="Cerrar to_das las pestañas" Command="{x:Static local:Comandos.CerrarTodas}" />
                         <Separator />
                         <MenuItem Header="_Recargar desde el disco" Command="Refresh" InputGestureText="F5" />
                         <Separator />
@@ -110,6 +123,9 @@
                         <MenuItem Header="E_xplorador" Command="{x:Static local:Comandos.VerExplorador}" InputGestureText="Ctrl+Mayús+E" />
                         <MenuItem Header="E_squema" Command="{x:Static local:Comandos.VerEsquema}" InputGestureText="Ctrl+Mayús+O" />
                         <MenuItem Header="_Barra lateral" Command="{x:Static local:Comandos.AlternarLateral}" InputGestureText="Ctrl+Mayús+B" />
+                        <Separator />
+                        <MenuItem Header="Pestaña _siguiente" Command="{x:Static local:Comandos.PestanaSiguiente}" InputGestureText="Ctrl+Tab" />
+                        <MenuItem Header="Pestaña _anterior" Command="{x:Static local:Comandos.PestanaAnterior}" InputGestureText="Ctrl+Mayús+Tab" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
@@ -177,7 +193,8 @@
                         <DockPanel x:Name="PanelExplorador">
                             <TextBlock x:Name="NombreCarpeta" DockPanel.Dock="Top" FontSize="11" FontWeight="Bold" Margin="20,0,8,4" />
                             <TreeView x:Name="Arbol" Background="Transparent" BorderThickness="0" Padding="6,0"
-                                      PreviewMouseLeftButtonUp="Arbol_PreviewMouseLeftButtonUp" KeyDown="Arbol_KeyDown">
+                                      PreviewMouseLeftButtonUp="Arbol_PreviewMouseLeftButtonUp" KeyDown="Arbol_KeyDown"
+                                      MouseDoubleClick="Arbol_MouseDoubleClick">
                                 <TreeView.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                         <Setter Property="IsExpanded" Value="{Binding Expandido, Mode=TwoWay}" />
@@ -230,6 +247,67 @@
 
                 <!-- Editor y vista previa -->
                 <Border Grid.Column="3" BorderThickness="1,1,0,0" BorderBrush="{DynamicResource Chrome.Borde}">
+                    <DockPanel>
+                    <!-- Pestañas -->
+                    <ScrollViewer x:Name="DesplazadorPestanas" DockPanel.Dock="Top" Height="35"
+                                  HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="DesplazadorPestanas_PreviewMouseWheel">
+                        <ItemsControl x:Name="BarraPestanas">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:Pestana}">
+                                    <Border x:Name="Fondo" Height="35" MinWidth="90" MaxWidth="240" Padding="12,0,6,0"
+                                            Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource Chrome.Borde}"
+                                            ToolTip="{Binding Descripcion}" MouseDown="Pestana_MouseDown">
+                                        <Border.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Cerrar" InputGestureText="Ctrl+W" Click="MenuCerrar_Click" />
+                                                <MenuItem Header="Cerrar otras" Click="MenuCerrarOtras_Click" />
+                                                <MenuItem Header="Cerrar a la derecha" Click="MenuCerrarDerecha_Click" />
+                                                <MenuItem Header="Cerrar todas" Click="MenuCerrarTodas_Click" />
+                                                <Separator />
+                                                <MenuItem Header="Copiar ruta" Click="MenuCopiarRuta_Click" IsEnabled="{Binding TieneRuta}" />
+                                                <MenuItem Header="Mostrar en el Explorador de Windows" Click="MenuMostrarEnCarpeta_Click" IsEnabled="{Binding TieneRuta}" />
+                                            </ContextMenu>
+                                        </Border.ContextMenu>
+                                        <Grid>
+                                            <Border x:Name="Marca" Height="2" VerticalAlignment="Top" Margin="-12,0,-6,0"
+                                                    Background="{DynamicResource Acento}" Visibility="Collapsed" />
+                                            <DockPanel>
+                                                <Button x:Name="Cerrar" DockPanel.Dock="Right" Style="{StaticResource BotonCerrarPestana}"
+                                                        Margin="6,0,0,0" Opacity="0" Click="CerrarPestana_Click" ToolTip="Cerrar (Ctrl+W)" />
+                                                <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Iconos}" FontSize="13" Margin="0,0,6,0"
+                                                           VerticalAlignment="Center" Foreground="{DynamicResource Acento}" />
+                                                <TextBlock x:Name="Nombre" Text="{Binding Nombre}" FontSize="13" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Chrome.Tenue}" />
+                                            </DockPanel>
+                                        </Grid>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsMouseOver, ElementName=Fondo}" Value="True">
+                                            <Setter TargetName="Cerrar" Property="Opacity" Value="1" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Modificado}" Value="True">
+                                            <Setter TargetName="Cerrar" Property="Opacity" Value="1" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding EsTemporal}" Value="True">
+                                            <Setter TargetName="Nombre" Property="FontStyle" Value="Italic" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding EsActiva}" Value="True">
+                                            <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Editor.Fondo}" />
+                                            <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
+                                            <Setter TargetName="Nombre" Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+                                            <Setter TargetName="Cerrar" Property="Opacity" Value="1" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="ColumnaEditor" Width="*" />
@@ -241,6 +319,7 @@
                         <GridSplitter x:Name="Divisor" Grid.Column="1" Width="4" Style="{StaticResource Divisor}" />
                         <wv2:WebView2 x:Name="Visor" Grid.Column="2" />
                     </Grid>
+                    </DockPanel>
                 </Border>
             </Grid>
 
@@ -260,7 +339,7 @@
                     <Button x:Name="EstadoPalabras" Style="{StaticResource ItemEstado}" />
                     <Button x:Name="EstadoCodificacion" Style="{StaticResource ItemEstado}" ToolTip="Codificación del archivo" />
                     <Button x:Name="EstadoFinLinea" Style="{StaticResource ItemEstado}" ToolTip="Fin de línea" />
-                    <Button Style="{StaticResource ItemEstado}" Content="Markdown" />
+                    <Button x:Name="EstadoLenguaje" Style="{StaticResource ItemEstado}" Content="Markdown" />
                 </StackPanel>
             </Grid>
         </Grid>

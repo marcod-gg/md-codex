@@ -1,8 +1,7 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,39 +22,34 @@ public partial class MainWindow : Window
 
     private enum Panel { Explorador, Esquema }
 
-    private string? _archivoActual;
-    // Host virtual que apunta a la carpeta del documento, para que funcionen imágenes y enlaces relativos.
-    private string? _hostActual;
+    private readonly ObservableCollection<Pestana> _pestanas = [];
+    // Documento vacío que muestra el editor cuando no hay pestañas abiertas.
+    private readonly TextDocument _sinDocumento = new();
+    private readonly HashSet<string> _hostsMapeados = [];
+    private Pestana? _activa;
     private string? _carpetaRaiz;
-    private Encoding _codificacion = new UTF8Encoding(false);
     private Modo _modo = Modo.Vista;
     private Panel _panel = Panel.Explorador;
     private bool _lateralVisible = true;
     private double _anchoLateral = 260;
     private IReadOnlyList<Titulo> _titulos = [];
     private bool _vistaLista;
+    // Al cambiar de pestaña, la vista previa vuelve al scroll que tenía esa pestaña.
+    private bool _restaurarScrollVista;
     // Marcar un botón de modo vuelve a llamar a AplicarModo; esto corta la recursión.
     private bool _aplicandoModo;
-    private FileSystemWatcher? _vigilante;
-    // Versión en disco que el usuario ya decidió no recargar, para no volver a preguntar por lo mismo.
-    private string? _cambioRechazado;
     private readonly DispatcherTimer _demoraDocumento;
-    private readonly DispatcherTimer _demoraDisco;
 
-    public MainWindow(string? archivoInicial)
+    public MainWindow(IReadOnlyList<string> archivosIniciales)
     {
         InitializeComponent();
 
-        _demoraDocumento = Temporizador(150, ActualizarDocumento);
-        // Los editores suelen disparar varios eventos al guardar; se agrupan en una sola revisión.
-        _demoraDisco = Temporizador(200, AlCambiarEnDisco);
+        BarraPestanas.ItemsSource = _pestanas;
+        Editor.Document = _sinDocumento;
+        _demoraDocumento = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+        _demoraDocumento.Tick += (_, _) => ActualizarDocumento();
 
         Editor.TextChanged += (_, _) => Reiniciar(_demoraDocumento);
-        Editor.Document.UndoStack.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(UndoStack.IsOriginalFile))
-                ActualizarTitulo();
-        };
         Editor.TextArea.Caret.PositionChanged += (_, _) => ActualizarPosicion();
         Editor.TextArea.TextView.ScrollOffsetChanged += (_, _) => SincronizarScroll();
         Editor.Options.HighlightCurrentLine = true;
@@ -71,19 +65,15 @@ public partial class MainWindow : Window
 
         AplicarModo(Modo.Vista);
         AplicarLateral();
-        ActualizarTitulo();
-        ActualizarPosicion();
-        ActualizarCodificacion();
+        Activar(null);
 
         Loaded += async (_, _) =>
         {
             await IniciarVisorAsync();
-            if (archivoInicial is not null)
-                AbrirArchivo(archivoInicial);
+            foreach (var archivo in archivosIniciales)
+                AbrirArchivo(archivo);
         };
     }
-
-    private string NombreDocumento => _archivoActual is null ? "Sin título" : Path.GetFileName(_archivoActual);
 
     // ---------- Vista previa ----------
 
@@ -95,12 +85,13 @@ public partial class MainWindow : Window
 
         var core = Visor.CoreWebView2;
         core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
-        // Sin atajos del navegador: F5, Ctrl+N, etc. llegan a la ventana y no recargan la plantilla.
+        // Sin atajos del navegador: F5, Ctrl+W, etc. llegan a la ventana y no recargan la plantilla.
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
         core.NavigationStarting += Visor_NavigationStarting;
         core.NavigationCompleted += (_, _) =>
         {
             _vistaLista = true;
+            _restaurarScrollVista = true;
             ActualizarDocumento();
         };
         core.NewWindowRequested += (_, e) =>
@@ -108,41 +99,53 @@ public partial class MainWindow : Window
             e.Handled = true;
             AbrirEnlace(e.Uri);
         };
+        core.WebMessageReceived += Visor_WebMessageReceived;
         Visor.NavigateToString(Renderizador.Plantilla());
     }
 
-    // Procesa el texto una vez: actualiza esquema, conteo de palabras y, si se ve, la vista previa.
+    // Procesa el texto de la pestaña activa: esquema, palabras y, si se ve, la vista previa.
     private void ActualizarDocumento()
     {
         _demoraDocumento.Stop();
-        var resultado = Renderizador.Procesar(Editor.Text);
+        var p = _activa;
+        var resultado = p is null ? null : Renderizador.Procesar(p.Documento.Text);
 
-        if (!resultado.Titulos.SequenceEqual(_titulos))
+        var titulos = resultado?.Titulos ?? [];
+        if (!titulos.SequenceEqual(_titulos))
         {
-            _titulos = resultado.Titulos;
+            _titulos = titulos;
             ListaEsquema.ItemsSource = _titulos;
             AplicarLateral();
         }
-        EstadoPalabras.Content = resultado.Palabras == 1 ? "1 palabra" : $"{resultado.Palabras:N0} palabras";
-        EstadoFinLinea.Content = Editor.Document.Text.Contains("\r\n") || !Editor.Document.Text.Contains('\n') ? "CRLF" : "LF";
+        if (p is not null)
+        {
+            EstadoPalabras.Content = resultado!.Palabras == 1 ? "1 palabra" : $"{resultado.Palabras:N0} palabras";
+            var texto = p.Documento.Text;
+            EstadoFinLinea.Content = texto.Contains("\r\n") || !texto.Contains('\n') ? "CRLF" : "LF";
+        }
 
-        if (!_vistaLista || _modo == Modo.Editor)
+        if (!_vistaLista || (p is not null && _modo == Modo.Editor))
             return;
 
-        var bienvenida = _archivoActual is null && Editor.Document.TextLength == 0 && _modo == Modo.Vista;
+        if (p?.Host is { } host && _hostsMapeados.Add(host))
+            Visor.CoreWebView2.SetVirtualHostNameToFolderMapping(host, p.Carpeta!, CoreWebView2HostResourceAccessKind.Allow);
+
         Enviar(new
         {
             tipo = "html",
-            html = bienvenida ? Renderizador.Bienvenida() : resultado.Html,
-            @base = _hostActual is null ? null : $"https://{_hostActual}/",
+            id = p?.Id ?? 0,
+            html = resultado?.Html ?? Renderizador.Bienvenida(),
+            @base = p?.Host is { } h ? $"https://{h}/" : null,
+            scroll = _restaurarScrollVista ? p?.ScrollVista : null,
         });
+        _restaurarScrollVista = false;
         SincronizarScroll();
     }
 
     // En modo dividido, la vista sigue a la primera línea visible del editor.
     private void SincronizarScroll()
     {
-        if (!_vistaLista || _modo != Modo.Dividido)
+        if (!_vistaLista || _modo != Modo.Dividido || _activa is null)
             return;
 
         var vista = Editor.TextArea.TextView;
@@ -151,9 +154,29 @@ public partial class MainWindow : Window
 
     private void Enviar(object mensaje) => Visor.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(mensaje));
 
+    // La página avisa dónde quedó su scroll; se guarda en la pestaña a la que pertenece.
+    private void Visor_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(e.WebMessageAsJson);
+            var raiz = json.RootElement;
+            if (raiz.TryGetProperty("tipo", out var tipo) && tipo.GetString() == "scroll"
+                && raiz.TryGetProperty("id", out var id) && raiz.TryGetProperty("y", out var y)
+                && _pestanas.FirstOrDefault(p => p.Id == id.GetInt32()) is { } pestana)
+                pestana.ScrollVista = y.GetDouble();
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            // Mensaje con otro formato: se ignora.
+        }
+    }
+
     // Lleva el editor y la vista previa a una línea del documento (base 0).
     private void IrALinea(int linea)
     {
+        if (_activa is null)
+            return;
         if (_modo != Modo.Vista)
         {
             var numero = Math.Min(linea + 1, Editor.Document.LineCount);
@@ -183,8 +206,8 @@ public partial class MainWindow : Window
         string? local = null;
         if (destino.IsFile)
             local = destino.LocalPath;
-        else if (_archivoActual is not null && destino.Host.Equals(_hostActual, StringComparison.OrdinalIgnoreCase))
-            local = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(_archivoActual)!, Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'))));
+        else if (_activa?.Carpeta is { } carpeta && destino.Host.Equals(_activa.Host, StringComparison.OrdinalIgnoreCase))
+            local = Path.GetFullPath(Path.Combine(carpeta, Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'))));
 
         if (local is not null && Directory.Exists(local))
         {
@@ -211,165 +234,199 @@ public partial class MainWindow : Window
         }
     }
 
-    // ---------- Archivos ----------
+    // ---------- Pestañas ----------
 
-    private void AbrirArchivo(string ruta)
+    // Abre el archivo en una pestaña, o activa la que ya lo tiene abierto.
+    // Una pestaña temporal (clic en el Explorador) reemplaza a la temporal anterior si no tiene cambios.
+    private void AbrirArchivo(string ruta, bool temporal = false)
     {
-        if (!ConfirmarDescartar())
-            return;
-
         var completa = Path.GetFullPath(ruta);
-        string texto;
+        var existente = _pestanas.FirstOrDefault(p => string.Equals(p.Ruta, completa, StringComparison.OrdinalIgnoreCase));
+        if (existente is not null)
+        {
+            if (!temporal)
+                existente.EsTemporal = false;
+            Activar(existente);
+            return;
+        }
+
+        Pestana nueva;
         try
         {
-            (texto, _codificacion) = LeerTexto(completa);
+            nueva = Pestana.Abrir(completa);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Avisar($"No se pudo abrir el archivo:\n{ex.Message}");
             return;
         }
+        nueva.EsTemporal = temporal;
 
-        AsignarArchivo(completa);
-        CargarTexto(texto, conservarPosicion: false);
-        ActualizarCodificacion();
+        // También se reemplaza un "Sin título" recién creado que sigue vacío.
+        var reemplazable = (temporal ? _pestanas.FirstOrDefault(p => p.EsTemporal && !p.Modificado) : null)
+            ?? (_activa is { Ruta: null, Modificado: false, Documento.TextLength: 0 } ? _activa : null);
+        Agregar(nueva, reemplazable);
+
+        // Como VS Code: si el archivo está fuera de la carpeta abierta, se abre su carpeta.
+        if (_carpetaRaiz is null || !completa.StartsWith(_carpetaRaiz + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            AbrirCarpeta(nueva.Carpeta!);
     }
 
-    private void AsignarArchivo(string? ruta)
+    private void Agregar(Pestana nueva, Pestana? reemplazar = null)
     {
-        var core = Visor.CoreWebView2;
-        if (_hostActual is not null)
-            core?.ClearVirtualHostNameToFolderMapping(_hostActual);
-        _vigilante?.Dispose();
-        _vigilante = null;
-        _cambioRechazado = null;
-        _archivoActual = ruta;
-        _hostActual = null;
-
-        if (ruta is not null)
+        nueva.CambioEnDisco += AlCambiarEnDisco;
+        nueva.PropertyChanged += (s, e) =>
         {
-            var carpeta = Path.GetDirectoryName(ruta)!;
-            // Un host distinto por carpeta evita que el caché mezcle imágenes de documentos diferentes.
-            _hostActual = $"d{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(carpeta.ToUpperInvariant())))[..16]}.visormd";
-            core?.SetVirtualHostNameToFolderMapping(_hostActual, carpeta, CoreWebView2HostResourceAccessKind.Allow);
-            Vigilar(carpeta, Path.GetFileName(ruta));
+            if (s == _activa && e.PropertyName is nameof(Pestana.Modificado) or nameof(Pestana.Nombre))
+                ActualizarTitulo();
+        };
 
-            // Como VS Code: si el archivo está fuera de la carpeta abierta, se abre su carpeta.
-            if (_carpetaRaiz is null || !ruta.StartsWith(_carpetaRaiz + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                AbrirCarpeta(carpeta);
+        var indice = reemplazar is not null ? _pestanas.IndexOf(reemplazar)
+            : _activa is not null ? _pestanas.IndexOf(_activa) + 1
+            : _pestanas.Count;
+        _pestanas.Insert(indice, nueva);
+        if (reemplazar is not null)
+        {
+            _pestanas.Remove(reemplazar);
+            reemplazar.Dispose();
+        }
+        Activar(nueva);
+    }
+
+    private void Activar(Pestana? pestana)
+    {
+        if (_activa is not null)
+        {
+            if (_activa == pestana)
+                return;
+            _activa.Cursor = Editor.CaretOffset;
+            _activa.ScrollEditor = Editor.VerticalOffset;
+            _activa.EsActiva = false;
         }
 
-        RevelarActual();
-        ActualizarTitulo();
-        CommandManager.InvalidateRequerySuggested();
-    }
-
-    private void CargarTexto(string texto, bool conservarPosicion)
-    {
-        var posicion = Editor.CaretOffset;
-        Editor.Document.Text = texto;
-        Editor.Document.UndoStack.ClearAll();
-        Editor.IsModified = false;
-        if (conservarPosicion)
+        _activa = pestana;
+        _restaurarScrollVista = true;
+        if (pestana is not null)
         {
-            Editor.CaretOffset = Math.Min(posicion, Editor.Document.TextLength);
+            pestana.EsActiva = true;
+            Editor.Document = pestana.Documento;
+            Editor.CaretOffset = Math.Min(pestana.Cursor, pestana.Documento.TextLength);
+            var scroll = pestana.ScrollEditor;
+            Dispatcher.BeginInvoke(() => Editor.ScrollToVerticalOffset(scroll), DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(() =>
+                (BarraPestanas.ItemContainerGenerator.ContainerFromItem(pestana) as FrameworkElement)?.BringIntoView(),
+                DispatcherPriority.Loaded);
         }
         else
         {
-            Editor.CaretOffset = 0;
-            Editor.ScrollToHome();
+            Editor.Document = _sinDocumento;
         }
+
+        AplicarDisposicion();
+        RevelarActual();
+        ActualizarTitulo();
+        ActualizarPosicion();
+        ActualizarCodificacion();
         ActualizarDocumento();
+        if (pestana is not null && _modo != Modo.Vista)
+            Dispatcher.BeginInvoke(() => Editor.TextArea.Focus(), DispatcherPriority.Input);
+        CommandManager.InvalidateRequerySuggested();
     }
 
-    // Permite leer aunque otro programa tenga el archivo abierto, y recuerda la codificación para guardar igual.
-    private static (string Texto, Encoding Codificacion) LeerTexto(string ruta)
+    private void CerrarPestanas(IEnumerable<Pestana> cuales)
     {
-        using var flujo = new FileStream(ruta, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var lector = new StreamReader(flujo, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
-        var texto = lector.ReadToEnd();
-        return (texto, lector.CurrentEncoding);
+        var cerrar = cuales.ToList();
+        if (cerrar.Count == 0 || !ConfirmarDescartar(cerrar))
+            return;
+
+        var indiceActiva = _activa is null ? -1 : _pestanas.IndexOf(_activa);
+        foreach (var p in cerrar)
+        {
+            _pestanas.Remove(p);
+            p.Dispose();
+        }
+
+        if (_activa is not null && !_pestanas.Contains(_activa))
+        {
+            _activa = null; // ya no existe: no hay que guardar su posición
+            Activar(_pestanas.Count == 0 ? null : _pestanas[Math.Clamp(indiceActiva, 0, _pestanas.Count - 1)]);
+        }
     }
 
-    private bool Guardar() => _archivoActual is null ? GuardarComo() : Escribir(_archivoActual);
+    private void Ciclar(int direccion)
+    {
+        if (_activa is null || _pestanas.Count < 2)
+            return;
+        var indice = (_pestanas.IndexOf(_activa) + direccion + _pestanas.Count) % _pestanas.Count;
+        Activar(_pestanas[indice]);
+    }
 
-    private bool GuardarComo()
+    // ---------- Archivos ----------
+
+    private bool Guardar(Pestana p) => p.Ruta is null ? GuardarComo(p) : Escribir(p, p.Ruta);
+
+    private bool GuardarComo(Pestana p)
     {
         var dialogo = new SaveFileDialog
         {
             Title = "Guardar como",
             Filter = "Markdown (*.md)|*.md|Texto (*.txt)|*.txt|Todos los archivos (*.*)|*.*",
             DefaultExt = ".md",
-            FileName = _archivoActual is null ? "documento.md" : Path.GetFileName(_archivoActual),
+            FileName = p.Ruta is null ? $"{p.Nombre}.md" : p.Nombre,
         };
-        var carpetaInicial = _archivoActual is null ? _carpetaRaiz : Path.GetDirectoryName(_archivoActual);
-        if (carpetaInicial is not null)
+        if ((p.Carpeta ?? _carpetaRaiz) is { } carpetaInicial)
             dialogo.InitialDirectory = carpetaInicial;
 
-        if (dialogo.ShowDialog(this) != true || !Escribir(dialogo.FileName))
+        if (dialogo.ShowDialog(this) != true || !Escribir(p, dialogo.FileName))
             return false;
 
-        if (!string.Equals(dialogo.FileName, _archivoActual, StringComparison.OrdinalIgnoreCase))
-        {
-            AsignarArchivo(Path.GetFullPath(dialogo.FileName));
-            RefrescarArbol();
-            ActualizarDocumento();
-        }
+        RefrescarArbol();
+        RevelarActual();
+        ActualizarDocumento();
         return true;
     }
 
-    private bool Escribir(string ruta)
+    private bool Escribir(Pestana p, string ruta)
     {
         try
         {
-            File.WriteAllText(ruta, Editor.Text, _codificacion);
-            Editor.IsModified = false;
+            p.Escribir(ruta);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Avisar($"No se pudo guardar el archivo:\n{ex.Message}");
+            Avisar($"No se pudo guardar {p.Nombre}:\n{ex.Message}");
             return false;
         }
     }
 
-    private bool ConfirmarDescartar()
+    // Pregunta una sola vez por todas las pestañas con cambios. Devuelve false si el usuario cancela.
+    private bool ConfirmarDescartar(IReadOnlyCollection<Pestana> pestanas)
     {
-        if (!Editor.IsModified)
+        var modificadas = pestanas.Where(p => p.Modificado).ToList();
+        if (modificadas.Count == 0)
             return true;
 
-        return MessageBox.Show(this, $"¿Quieres guardar los cambios en {NombreDocumento}?", "VisorMD",
-                MessageBoxButton.YesNoCancel, MessageBoxImage.Warning) switch
+        var pregunta = modificadas.Count == 1
+            ? $"¿Quieres guardar los cambios en {modificadas[0].Nombre}?"
+            : $"Hay {modificadas.Count} archivos con cambios sin guardar:\n\n{string.Join("\n", modificadas.Select(p => "• " + p.Nombre))}\n\n¿Quieres guardarlos?";
+        return MessageBox.Show(this, pregunta, "VisorMD", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning) switch
         {
-            MessageBoxResult.Yes => Guardar(),
+            MessageBoxResult.Yes => modificadas.All(Guardar),
             MessageBoxResult.No => true,
             _ => false,
         };
     }
 
-    private void Vigilar(string carpeta, string nombre)
+    private void AlCambiarEnDisco(object? sender, EventArgs e)
     {
-        _vigilante = new FileSystemWatcher(carpeta, nombre)
-        {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-        };
-        FileSystemEventHandler alCambiar = (_, _) => Dispatcher.BeginInvoke(() => Reiniciar(_demoraDisco));
-        _vigilante.Changed += alCambiar;
-        _vigilante.Created += alCambiar;
-        _vigilante.Renamed += (s, e) => alCambiar(s, e);
-        _vigilante.EnableRaisingEvents = true;
-    }
-
-    private void AlCambiarEnDisco()
-    {
-        _demoraDisco.Stop();
-        if (_archivoActual is null)
+        if (sender is not Pestana { Ruta: { } ruta } p || !_pestanas.Contains(p))
             return;
 
         string texto;
         try
         {
-            (texto, _) = LeerTexto(_archivoActual);
+            (texto, _) = Pestana.LeerTexto(ruta);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -377,18 +434,27 @@ public partial class MainWindow : Window
         }
 
         // Incluye nuestro propio guardado, que también dispara el aviso.
-        if (texto == Editor.Text || texto == _cambioRechazado)
+        if (texto == p.Documento.Text || texto == p.CambioRechazado)
             return;
 
-        if (Editor.IsModified && MessageBox.Show(this,
-                $"{NombreDocumento} cambió fuera de VisorMD.\n¿Quieres recargarlo? Perderás los cambios que no guardaste.",
+        if (p.Modificado && MessageBox.Show(this,
+                $"{p.Nombre} cambió fuera de VisorMD.\n¿Quieres recargarlo? Perderás los cambios que no guardaste.",
                 "VisorMD", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
-            _cambioRechazado = texto;
+            p.CambioRechazado = texto;
             return;
         }
 
-        CargarTexto(texto, conservarPosicion: true);
+        Recargar(p, texto);
+    }
+
+    private void Recargar(Pestana p, string texto)
+    {
+        var posicion = p == _activa ? Editor.CaretOffset : p.Cursor;
+        p.Recargar(texto);
+        p.Cursor = Math.Min(posicion, texto.Length);
+        if (p == _activa)
+            Editor.CaretOffset = p.Cursor;
     }
 
     // ---------- Explorador ----------
@@ -422,7 +488,7 @@ public partial class MainWindow : Window
     private void RevelarActual()
     {
         if (Arbol.ItemsSource is IEnumerable<NodoArchivo> nodos)
-            NodoArchivo.Revelar(nodos, _archivoActual);
+            NodoArchivo.Revelar(nodos, _activa?.Ruta);
     }
 
     // ---------- Barra lateral ----------
@@ -440,7 +506,7 @@ public partial class MainWindow : Window
             _anchoLateral = ColumnaLateral.ActualWidth;
 
         ColumnaLateral.Width = new GridLength(_lateralVisible ? _anchoLateral : 0);
-        Lateral.Visibility = _lateralVisible ? Visibility.Visible : Visibility.Collapsed;
+        Lateral.Visibility = Visible(_lateralVisible);
         DivisorLateral.Visibility = Lateral.Visibility;
         BotonLateral.IsChecked = _lateralVisible;
         ActividadExplorador.IsChecked = _lateralVisible && _panel == Panel.Explorador;
@@ -453,6 +519,7 @@ public partial class MainWindow : Window
         ExploradorVacio.Visibility = Visible(explorador && _carpetaRaiz is null);
         ListaEsquema.Visibility = Visible(!explorador && _titulos.Count > 0);
         EsquemaVacio.Visibility = Visible(!explorador && _titulos.Count == 0);
+        EsquemaVacio.Text = _activa is null ? "No hay ningún documento abierto." : "El documento no tiene títulos.";
     }
 
     // ---------- Modos y edición ----------
@@ -465,22 +532,13 @@ public partial class MainWindow : Window
         try
         {
             _modo = modo;
-            var conEditor = modo != Modo.Vista;
-            var conVista = modo != Modo.Editor;
-
-            ColumnaEditor.Width = conEditor ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-            ColumnaVista.Width = conVista ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-            Editor.Visibility = Visible(conEditor);
-            Visor.Visibility = Visible(conVista);
-            Divisor.Visibility = Visible(conEditor && conVista);
-
             BotonVista.IsChecked = modo == Modo.Vista;
             BotonDividido.IsChecked = modo == Modo.Dividido;
             BotonEditor.IsChecked = modo == Modo.Editor;
             EstadoModo.Content = modo.ToString();
-            EstadoPosicion.Visibility = Visible(conEditor);
+            AplicarDisposicion();
 
-            if (conEditor)
+            if (_activa is not null && modo != Modo.Vista)
                 Dispatcher.BeginInvoke(() => Editor.TextArea.Focus(), DispatcherPriority.Input);
             ActualizarDocumento();
             CommandManager.InvalidateRequerySuggested();
@@ -489,6 +547,27 @@ public partial class MainWindow : Window
         {
             _aplicandoModo = false;
         }
+    }
+
+    // Muestra editor y vista según el modo; sin pestañas solo queda la bienvenida.
+    private void AplicarDisposicion()
+    {
+        var hayDocumento = _activa is not null;
+        var conEditor = hayDocumento && _modo != Modo.Vista;
+        var conVista = !hayDocumento || _modo != Modo.Editor;
+
+        ColumnaEditor.Width = conEditor ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        ColumnaVista.Width = conVista ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Editor.Visibility = Visible(conEditor);
+        Visor.Visibility = Visible(conVista);
+        Divisor.Visibility = Visible(conEditor && conVista);
+        DesplazadorPestanas.Visibility = Visible(hayDocumento);
+
+        EstadoPosicion.Visibility = Visible(conEditor);
+        EstadoPalabras.Visibility = Visible(hayDocumento);
+        EstadoCodificacion.Visibility = Visible(hayDocumento);
+        EstadoFinLinea.Visibility = Visible(hayDocumento);
+        EstadoLenguaje.Visibility = Visible(hayDocumento);
     }
 
     // Envuelve la selección con la marca (o la inserta vacía con el cursor al medio).
@@ -506,8 +585,8 @@ public partial class MainWindow : Window
 
     private void ActualizarTitulo()
     {
-        Title = $"{(Editor.IsModified ? "● " : "")}{NombreDocumento} — VisorMD";
-        TituloVentana.ToolTip = _archivoActual;
+        Title = _activa is null ? "VisorMD" : $"{(_activa.Modificado ? "● " : "")}{_activa.Nombre} — VisorMD";
+        TituloVentana.ToolTip = _activa?.Ruta;
     }
 
     private void ActualizarPosicion()
@@ -518,11 +597,12 @@ public partial class MainWindow : Window
 
     private void ActualizarCodificacion()
     {
-        EstadoCodificacion.Content = _codificacion switch
+        EstadoCodificacion.Content = _activa?.Codificacion switch
         {
-            UTF8Encoding utf8 => utf8.GetPreamble().Length > 0 ? "UTF-8 con BOM" : "UTF-8",
-            UnicodeEncoding { CodePage: 1201 } => "UTF-16 BE",
-            UnicodeEncoding => "UTF-16 LE",
+            null => "",
+            System.Text.UTF8Encoding utf8 => utf8.GetPreamble().Length > 0 ? "UTF-8 con BOM" : "UTF-8",
+            System.Text.UnicodeEncoding { CodePage: 1201 } => "UTF-16 BE",
+            System.Text.UnicodeEncoding => "UTF-16 LE",
             var otra => otra.WebName.ToUpperInvariant(),
         };
     }
@@ -549,6 +629,7 @@ public partial class MainWindow : Window
         recursos["Chrome.Hover"] = Tema.Pincel(p.ChromeHover);
         recursos["Chrome.Activo"] = Tema.Pincel(p.ChromeActivo);
         recursos["Acento"] = Tema.Pincel(p.Acento);
+        recursos["Editor.Fondo"] = Tema.Pincel(p.Fondo);
 
         Editor.Background = Tema.Pincel(p.Fondo);
         Editor.Foreground = Tema.Pincel(p.Texto);
@@ -575,13 +656,6 @@ public partial class MainWindow : Window
 
     // ---------- Utilidades ----------
 
-    private DispatcherTimer Temporizador(int milisegundos, Action accion)
-    {
-        var temporizador = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milisegundos) };
-        temporizador.Tick += (_, _) => accion();
-        return temporizador;
-    }
-
     private static void Reiniciar(DispatcherTimer temporizador)
     {
         temporizador.Stop();
@@ -598,10 +672,24 @@ public partial class MainWindow : Window
         return actual as T;
     }
 
+    private static Pestana? PestanaDe(object sender) => (sender as FrameworkElement)?.DataContext as Pestana;
+
     private void Avisar(string mensaje) =>
         MessageBox.Show(this, mensaje, "VisorMD", MessageBoxButton.OK, MessageBoxImage.Warning);
 
     // ---------- Eventos ----------
+
+    // Ctrl+Tab se atiende antes de que la navegación por teclado de WPF lo use para mover el foco.
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.Tab && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            Ciclar(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewKeyDown(e);
+    }
 
     private void Ventana_PreviewDragOver(object sender, DragEventArgs e)
     {
@@ -611,16 +699,80 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    // Una carpeta arrastrada se abre en el Explorador; un archivo, en el editor.
+    // Las carpetas arrastradas se abren en el Explorador; los archivos, cada uno en su pestaña.
     private void Ventana_PreviewDrop(object sender, DragEventArgs e)
     {
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] { Length: > 0 } rutas)
             return;
         e.Handled = true;
-        if (Directory.Exists(rutas[0]))
-            AbrirCarpeta(rutas[0]);
-        else
-            AbrirArchivo(rutas[0]);
+        foreach (var ruta in rutas)
+        {
+            if (Directory.Exists(ruta))
+                AbrirCarpeta(ruta);
+            else
+                AbrirArchivo(ruta);
+        }
+    }
+
+    private void Pestana_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (PestanaDe(sender) is not { } p)
+            return;
+        if (e.ChangedButton == MouseButton.Middle)
+        {
+            CerrarPestanas([p]);
+            e.Handled = true;
+        }
+        else if (e.ChangedButton == MouseButton.Left)
+        {
+            Activar(p);
+            if (e.ClickCount == 2)
+                p.EsTemporal = false;
+        }
+    }
+
+    private void CerrarPestana_Click(object sender, RoutedEventArgs e)
+    {
+        if (PestanaDe(sender) is { } p)
+            CerrarPestanas([p]);
+    }
+
+    private void DesplazadorPestanas_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        DesplazadorPestanas.ScrollToHorizontalOffset(DesplazadorPestanas.HorizontalOffset - e.Delta);
+        e.Handled = true;
+    }
+
+    private void MenuCerrar_Click(object sender, RoutedEventArgs e)
+    {
+        if (PestanaDe(sender) is { } p)
+            CerrarPestanas([p]);
+    }
+
+    private void MenuCerrarOtras_Click(object sender, RoutedEventArgs e)
+    {
+        if (PestanaDe(sender) is { } p)
+            CerrarPestanas(_pestanas.Where(x => x != p));
+    }
+
+    private void MenuCerrarDerecha_Click(object sender, RoutedEventArgs e)
+    {
+        if (PestanaDe(sender) is { } p)
+            CerrarPestanas(_pestanas.Skip(_pestanas.IndexOf(p) + 1));
+    }
+
+    private void MenuCerrarTodas_Click(object sender, RoutedEventArgs e) => CerrarPestanas(_pestanas);
+
+    private void MenuCopiarRuta_Click(object sender, RoutedEventArgs e)
+    {
+        if (PestanaDe(sender)?.Ruta is { } ruta)
+            Clipboard.SetText(ruta);
+    }
+
+    private void MenuMostrarEnCarpeta_Click(object sender, RoutedEventArgs e)
+    {
+        if (PestanaDe(sender)?.Ruta is { } ruta)
+            Process.Start("explorer.exe", $"/select,\"{ruta}\"");
     }
 
     private void Arbol_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -633,7 +785,14 @@ public partial class MainWindow : Window
 
         if (nodo.EsCarpeta)
             nodo.Expandido = !nodo.Expandido;
-        else if (!string.Equals(nodo.Ruta, _archivoActual, StringComparison.OrdinalIgnoreCase))
+        else
+            AbrirArchivo(nodo.Ruta, temporal: true);
+    }
+
+    // Doble clic en el Explorador fija la pestaña temporal.
+    private void Arbol_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is NodoArchivo { EsCarpeta: false } nodo)
             AbrirArchivo(nodo.Ruta);
     }
 
@@ -704,13 +863,7 @@ public partial class MainWindow : Window
 
     private void Nuevo_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        if (!ConfirmarDescartar())
-            return;
-
-        _codificacion = new UTF8Encoding(false);
-        AsignarArchivo(null);
-        CargarTexto("", conservarPosicion: false);
-        ActualizarCodificacion();
+        Agregar(Pestana.Nueva());
         if (_modo == Modo.Vista)
             AplicarModo(Modo.Dividido);
     }
@@ -721,13 +874,14 @@ public partial class MainWindow : Window
         {
             Title = "Abrir archivo Markdown",
             Filter = "Markdown (*.md;*.markdown)|*.md;*.markdown;*.mdown;*.mkd|Texto (*.txt)|*.txt|Todos los archivos (*.*)|*.*",
+            Multiselect = true,
         };
-        var carpetaInicial = _archivoActual is null ? _carpetaRaiz : Path.GetDirectoryName(_archivoActual);
-        if (carpetaInicial is not null)
+        if ((_activa?.Carpeta ?? _carpetaRaiz) is { } carpetaInicial)
             dialogo.InitialDirectory = carpetaInicial;
 
         if (dialogo.ShowDialog(this) == true)
-            AbrirArchivo(dialogo.FileName);
+            foreach (var archivo in dialogo.FileNames)
+                AbrirArchivo(archivo);
     }
 
     private void AbrirCarpeta_Executed(object sender, ExecutedRoutedEventArgs e)
@@ -743,23 +897,50 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Guardar_Executed(object sender, ExecutedRoutedEventArgs e) => Guardar();
+    private void Guardar_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_activa is not null)
+            Guardar(_activa);
+    }
 
-    private void GuardarComo_Executed(object sender, ExecutedRoutedEventArgs e) => GuardarComo();
+    private void GuardarComo_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_activa is not null)
+            GuardarComo(_activa);
+    }
+
+    private void GuardarTodo_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        foreach (var p in _pestanas.Where(p => p.Modificado).ToList())
+            if (!Guardar(p))
+                return;
+    }
+
+    private void CerrarPestana_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_activa is not null)
+            CerrarPestanas([_activa]);
+    }
+
+    private void CerrarTodas_Executed(object sender, ExecutedRoutedEventArgs e) => CerrarPestanas(_pestanas);
+
+    private void PestanaSiguiente_Executed(object sender, ExecutedRoutedEventArgs e) => Ciclar(1);
+
+    private void PestanaAnterior_Executed(object sender, ExecutedRoutedEventArgs e) => Ciclar(-1);
 
     private void Recargar_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        if (_archivoActual is null)
+        if (_activa is not { Ruta: { } ruta } p)
             return;
-        if (Editor.IsModified && MessageBox.Show(this, "¿Quieres descartar los cambios y recargar el archivo desde el disco?",
+        if (p.Modificado && MessageBox.Show(this, "¿Quieres descartar los cambios y recargar el archivo desde el disco?",
                 "VisorMD", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
         try
         {
-            var (texto, codificacion) = LeerTexto(_archivoActual);
-            _codificacion = codificacion;
-            CargarTexto(texto, conservarPosicion: true);
+            var (texto, codificacion) = Pestana.LeerTexto(ruta);
+            p.Codificacion = codificacion;
+            Recargar(p, texto);
             ActualizarCodificacion();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -768,9 +949,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void HayArchivo_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _archivoActual is not null;
+    private void HayPestana_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _activa is not null;
 
-    private void EditorVisible_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _modo != Modo.Vista;
+    private void HayArchivo_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _activa?.Ruta is not null;
+
+    private void EditorVisible_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _activa is not null && _modo != Modo.Vista;
 
     private void ModoVista_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Vista);
 
@@ -794,7 +977,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (!ConfirmarDescartar())
+        if (!ConfirmarDescartar(_pestanas))
             e.Cancel = true;
         base.OnClosing(e);
     }
@@ -802,7 +985,8 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         SystemEvents.UserPreferenceChanged -= AlCambiarPreferencias;
-        _vigilante?.Dispose();
+        foreach (var p in _pestanas)
+            p.Dispose();
         base.OnClosed(e);
     }
 }

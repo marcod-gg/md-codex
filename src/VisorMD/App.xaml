@@ -15,6 +15,7 @@
         <SolidColorBrush x:Key="Chrome.Hover" Color="#1AFFFFFF" />
         <SolidColorBrush x:Key="Chrome.Activo" Color="#2AFFFFFF" />
         <SolidColorBrush x:Key="Acento" Color="#4493F8" />
+        <SolidColorBrush x:Key="Editor.Fondo" Color="#0D1117" />
         <SolidColorBrush x:Key="Estado.Fondo" Color="#0078D4" />
         <SolidColorBrush x:Key="Estado.Texto" Color="#FFFFFF" />
         <SolidColorBrush x:Key="Estado.Hover" Color="#26FFFFFF" />
@@ -143,6 +144,39 @@
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
                                 <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Botón de cerrar de una pestaña: muestra ● si hay cambios sin guardar, y ✕ al pasar el mouse -->
+        <Style x:Key="BotonCerrarPestana" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fondo" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <Grid>
+                                <TextBlock x:Name="Equis" Text="&#xE8BB;" FontFamily="{StaticResource Iconos}" FontSize="9"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Ellipse x:Name="Punto" Width="8" Height="8" Fill="{TemplateBinding Foreground}" Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Modificado}" Value="True">
+                                <Setter TargetName="Equis" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Punto" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                                <Setter TargetName="Equis" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="Punto" Property="Visibility" Value="Collapsed" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

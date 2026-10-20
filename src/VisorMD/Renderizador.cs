@@ -84,12 +84,16 @@ public static partial class Renderizador
         <script>
           const main = document.querySelector('main');
           const base = document.querySelector('base');
+          let pestana = 0;
+          let avisoPendiente = false;
 
           chrome.webview.addEventListener('message', e => {
             const m = e.data;
             if (m.tipo === 'html') {
+              pestana = m.id;
               if (m.base) base.setAttribute('href', m.base); else base.removeAttribute('href');
               main.innerHTML = m.html;
+              if (m.scroll != null) scrollTo(0, m.scroll);
             } else if (m.tipo === 'linea') {
               irALinea(m.linea);
             }
@@ -103,6 +107,16 @@ public static partial class Renderizador
             }
             scrollTo({ top: destino ? destino.getBoundingClientRect().top + scrollY - 16 : 0 });
           }
+
+          // Avisa a la app dónde quedó el scroll de cada pestaña, para restaurarlo al volver a ella.
+          addEventListener('scroll', () => {
+            if (avisoPendiente) return;
+            avisoPendiente = true;
+            setTimeout(() => {
+              avisoPendiente = false;
+              chrome.webview.postMessage({ tipo: 'scroll', id: pestana, y: scrollY });
+            }, 150);
+          });
 
           // Los enlaces internos (#seccion) se resuelven aquí, sin salir del documento.
           document.addEventListener('click', e => {

@@ -5,12 +5,11 @@ namespace VisorMD;
 
 public partial class App : Application
 {
-    // Acepta la ruta del archivo como argumento para poder usarlo con "Abrir con…" en Windows.
+    // Acepta rutas de archivos como argumentos para poder usarlo con "Abrir con…" en Windows; cada una abre una pestaña.
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        var archivo = e.Args.FirstOrDefault(File.Exists);
-        new MainWindow(archivo).Show();
+        new MainWindow(e.Args.Where(File.Exists).ToList()).Show();
     }
 }
