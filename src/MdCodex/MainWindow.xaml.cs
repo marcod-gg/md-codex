@@ -90,9 +90,117 @@ public partial class MainWindow : Window
         {
             _inicioVisor = IniciarVisorAsync();
             await _inicioVisor;
-            foreach (var archivo in archivosIniciales)
-                AbrirArchivo(archivo);
+            if (archivosIniciales.Count > 0)
+            {
+                foreach (var archivo in archivosIniciales)
+                    AbrirArchivo(archivo);
+            }
+            else
+            {
+                RestaurarSesion();
+            }
         };
+    }
+
+    // ---------- Recientes y sesión ----------
+
+    private readonly Recientes _recientes = Recientes.Cargar();
+    // Al restaurar la sesión no se reordenan los recientes.
+    private bool _restaurando;
+
+    private void RestaurarSesion()
+    {
+        if (_recientes.UltimaSesion is not { } sesion)
+            return;
+        _restaurando = true;
+        try
+        {
+            if (sesion.Carpeta is { } carpeta && Directory.Exists(carpeta))
+                AbrirCarpeta(carpeta);
+            foreach (var archivo in sesion.Archivos.Where(File.Exists))
+                AbrirArchivo(archivo);
+            if (_pestanas.FirstOrDefault(p => string.Equals(p.Ruta, sesion.Activo, StringComparison.OrdinalIgnoreCase)) is { } activa)
+                Activar(activa);
+            if (Enum.TryParse<Modo>(sesion.Modo, out var modo))
+                AplicarModo(modo);
+        }
+        finally
+        {
+            _restaurando = false;
+        }
+    }
+
+    private void GuardarSesion()
+    {
+        // Los documentos sin título no tienen dónde reabrirse.
+        _recientes.UltimaSesion = new Sesion(
+            _carpetaRaiz,
+            _pestanas.Where(p => p.Ruta is not null).Select(p => p.Ruta!).ToList(),
+            _activa?.Ruta,
+            _modo.ToString());
+        _recientes.Guardar();
+    }
+
+    private void RegistrarArchivoReciente(string ruta)
+    {
+        if (_restaurando)
+            return;
+        _recientes.AgregarArchivo(ruta);
+        _recientes.Guardar();
+    }
+
+    private void RegistrarCarpetaReciente(string ruta)
+    {
+        if (_restaurando)
+            return;
+        _recientes.AgregarCarpeta(ruta);
+        _recientes.Guardar();
+    }
+
+    // Arma el submenú "Abrir reciente" cada vez que se abre el menú Archivo.
+    private void RellenarRecientes()
+    {
+        _recientes.QuitarInexistentes();
+        MenuRecientes.Items.Clear();
+
+        // El nombre va en un TextBlock: como Header de texto, un "_" se tomaría como tecla de acceso.
+        MenuItem Elemento(string ruta, string icono, Action abrir)
+        {
+            var item = new MenuItem
+            {
+                Header = new TextBlock { Text = Path.GetFileName(Path.TrimEndingDirectorySeparator(ruta)) is { Length: > 0 } nombre ? nombre : ruta },
+                Icon = new TextBlock { Text = icono, FontFamily = (FontFamily)FindResource("Iconos") },
+                ToolTip = ruta,
+            };
+            item.Click += (_, _) => abrir();
+            return item;
+        }
+
+        foreach (var archivo in _recientes.Archivos)
+            MenuRecientes.Items.Add(Elemento(archivo, "", () => AbrirArchivo(archivo)));
+        if (_recientes.Archivos.Count > 0 && _recientes.Carpetas.Count > 0)
+            MenuRecientes.Items.Add(new Separator());
+        foreach (var carpeta in _recientes.Carpetas)
+            MenuRecientes.Items.Add(Elemento(carpeta, "", () =>
+            {
+                AbrirCarpeta(carpeta);
+                RegistrarCarpetaReciente(carpeta);
+                MostrarPanel(Panel.Explorador);
+            }));
+
+        if (MenuRecientes.Items.Count == 0)
+        {
+            MenuRecientes.Items.Add(new MenuItem { Header = "No hay elementos recientes", IsEnabled = false });
+            return;
+        }
+        MenuRecientes.Items.Add(new Separator());
+        var limpiar = new MenuItem { Header = "Limpiar recientes" };
+        limpiar.Click += (_, _) =>
+        {
+            _recientes.Limpiar();
+            _recientes.Guardar();
+        };
+        MenuRecientes.Items.Add(limpiar);
     }
 
     // ---------- Vista previa ----------
@@ -459,6 +567,7 @@ public partial class MainWindow : Window
             if (!temporal)
                 existente.EsTemporal = false;
             Activar(existente);
+            RegistrarArchivoReciente(completa);
             return;
         }
 
@@ -478,6 +587,7 @@ public partial class MainWindow : Window
         var reemplazable = (temporal ? _pestanas.FirstOrDefault(p => p.EsTemporal && !p.Modificado) : null)
             ?? (_activa is { Ruta: null, Modificado: false, Documento.TextLength: 0 } ? _activa : null);
         Agregar(nueva, reemplazable);
+        RegistrarArchivoReciente(completa);
 
         // Como VS Code: si el archivo está fuera de la carpeta abierta, se abre su carpeta.
         if (_carpetaRaiz is null || !completa.StartsWith(_carpetaRaiz + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
@@ -599,6 +709,7 @@ public partial class MainWindow : Window
         if (dialogo.ShowDialog(this) != true || !Escribir(p, dialogo.FileName))
             return false;
 
+        RegistrarArchivoReciente(p.Ruta!);
         RefrescarArbol();
         RevelarActual();
         ActualizarDocumento();
@@ -1044,9 +1155,14 @@ public partial class MainWindow : Window
         foreach (var ruta in rutas)
         {
             if (Directory.Exists(ruta))
+            {
                 AbrirCarpeta(ruta);
+                RegistrarCarpetaReciente(Path.GetFullPath(ruta));
+            }
             else
+            {
                 AbrirArchivo(ruta);
+            }
         }
     }
 
@@ -1186,6 +1302,8 @@ public partial class MainWindow : Window
         IInputElement destino = Editor.IsVisible ? Editor.TextArea : this;
         foreach (var item in menu.Items.OfType<MenuItem>())
             item.CommandTarget = destino;
+        if (menu.Items.Contains(MenuRecientes))
+            RellenarRecientes();
         menu.PlacementTarget = boton;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -1241,6 +1359,7 @@ public partial class MainWindow : Window
         if (dialogo.ShowDialog(this) == true)
         {
             AbrirCarpeta(dialogo.FolderName);
+            RegistrarCarpetaReciente(dialogo.FolderName);
             MostrarPanel(Panel.Explorador);
         }
     }
@@ -1343,6 +1462,8 @@ public partial class MainWindow : Window
         }
         if (!ConfirmarDescartar(_pestanas))
             e.Cancel = true;
+        else
+            GuardarSesion();
         base.OnClosing(e);
     }
 

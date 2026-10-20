@@ -84,6 +84,7 @@
                         <MenuItem Header="_Nuevo" Command="New" InputGestureText="Ctrl+N" />
                         <MenuItem Header="_Abrir archivo…" Command="Open" InputGestureText="Ctrl+O" />
                         <MenuItem Header="Abrir _carpeta…" Command="{x:Static local:Comandos.AbrirCarpeta}" />
+                        <MenuItem x:Name="MenuRecientes" Header="Abrir _reciente" />
                         <Separator />
                         <MenuItem Header="_Guardar" Command="Save" InputGestureText="Ctrl+S" />
                         <MenuItem Header="Guardar _como…" Command="SaveAs" InputGestureText="Ctrl+Mayús+S" />
