@@ -2,7 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace LupaMD;
+namespace MdCodex;
 
 public static class Documentos
 {
@@ -16,5 +16,5 @@ public static class Documentos
 
     // Host virtual para una carpeta; uno distinto por carpeta evita que el caché mezcle archivos.
     public static string HostPara(string carpeta) =>
-        $"d{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(carpeta.ToUpperInvariant())))[..16]}.lupamd";
+        $"d{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(carpeta.ToUpperInvariant())))[..16]}.mdcodex";
 }

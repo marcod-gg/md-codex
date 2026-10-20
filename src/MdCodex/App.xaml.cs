@@ -1,7 +1,7 @@
 using System.IO;
 using System.Windows;
 
-namespace LupaMD;
+namespace MdCodex;
 
 public partial class App : Application
 {

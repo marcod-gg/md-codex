@@ -7,15 +7,15 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Product>Lupa MD</Product>
+    <Product>MD Codex</Product>
     <Description>Visor y editor de Markdown para Windows</Description>
     <Company>skolldev</Company>
-    <Authors>skolldev</Authors>
-    <Copyright>© 2026 skolldev</Copyright>
+    <Authors>Marco González G.</Authors>
+    <Copyright>© 2026 Marco González G.</Copyright>
     <Version>1.0.0</Version>
-    <RepositoryUrl>https://github.com/marcod-gg/lupa-md</RepositoryUrl>
+    <RepositoryUrl>https://github.com/marcod-gg/md-codex</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/marcod-gg/lupa-md</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/marcod-gg/md-codex</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,7 +24,7 @@
     <Resource Include="Recursos\skolldev-silueta.png" />
   </ItemGroup>
 
-  <!-- Editor por bloques del modo Pro, compilado desde ..\LupaMD.Pro con "npm run build". -->
+  <!-- Editor por bloques del modo Pro, compilado desde ..\MdCodex.Pro con "npm run build". -->
   <ItemGroup>
     <None Include="Pro\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

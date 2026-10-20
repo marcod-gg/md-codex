@@ -1,7 +1,7 @@
 {
-  "name": "lupa-md-pro",
+  "name": "md-codex-pro",
   "version": "1.0.0",
-  "description": "Editor por bloques (modo Pro) de Lupa MD",
+  "description": "Editor por bloques (modo Pro) de MD Codex",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

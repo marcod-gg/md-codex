@@ -11,7 +11,7 @@ Logo del desarrollador en distintas versiones. Todas tienen fondo transparente s
 | `apilado/` | Lobo con «skolldev» debajo (pantallas de presentación) | `claro`, `oscuro` | ancho 256, 512, 1024 |
 | `skolldev-oscuro.ico`, `skolldev-acento.ico` | Ícono de Windows multitamaño (16–256) | | |
 
-**Temas:** `claro` = trazo oscuro `#1F2328`, para fondos claros · `oscuro` = trazo claro `#E6EDF3`, para fondos oscuros · `acento` = lobo blanco sobre el azul `#0078D4` de Lupa MD.
+**Temas:** `claro` = trazo oscuro `#1F2328`, para fondos claros · `oscuro` = trazo claro `#E6EDF3`, para fondos oscuros · `acento` = lobo blanco sobre el azul `#0078D4` de MD Codex.
 
 Para regenerarlas desde el PNG original (trazo negro sobre fondo transparente):
 

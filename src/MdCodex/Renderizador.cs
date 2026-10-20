@@ -7,7 +7,7 @@ using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
-namespace LupaMD;
+namespace MdCodex;
 
 public sealed record Titulo(string Texto, int Nivel, int Linea)
 {
@@ -64,13 +64,13 @@ public static partial class Renderizador
 
     public static string Bienvenida() => $"""
         <div class="vacio">
-          <h1>Lupa MD</h1>
+          <h1>MD Codex</h1>
           <p>Arrastra un archivo <code>.md</code> a esta ventana o presiona <kbd>Ctrl</kbd>+<kbd>O</kbd> para abrir uno.</p>
           <p class="nota"><kbd>Ctrl</kbd>+<kbd>N</kbd> crea un documento nuevo · <kbd>Ctrl</kbd>+<kbd>2</kbd> muestra editor y vista lado a lado</p>
         </div>
         <footer class="marca">
           <span class="lobo" style="--logo: url({Marca.LogoDataUri})"></span>
-          <span>Desarrollado por <strong>{Marca.Desarrollador}</strong> · <a href="{Marca.Repositorio}">GitHub</a></span>
+          <span>Desarrollado por <strong>{Marca.Autor}</strong> · <a href="{Marca.Repositorio}" title="Abrir el repositorio en GitHub">GitHub</a></span>
         </footer>
         """;
 
@@ -80,7 +80,7 @@ public static partial class Renderizador
         <head>
         <meta charset="utf-8">
         <base>
-        <title>Lupa MD</title>
+        <title>MD Codex</title>
         <style>{{Estilo}}</style>
         </head>
         <body>
@@ -120,6 +120,12 @@ public static partial class Renderizador
               avisoPendiente = false;
               chrome.webview.postMessage({ tipo: 'scroll', id: pestana, y: scrollY });
             }, 150);
+          });
+
+          // Sin la barra de estado del navegador, la dirección de un enlace se muestra como tooltip.
+          document.addEventListener('mouseover', e => {
+            const a = e.target.closest('a[href]');
+            if (a && !a.hasAttribute('title')) a.title = a.href;
           });
 
           // Los enlaces internos (#seccion) se resuelven aquí, sin salir del documento.

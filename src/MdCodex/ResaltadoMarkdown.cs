@@ -3,7 +3,7 @@ using System.Xml;
 using ICSharpCode.AvalonEdit.Highlighting;
 using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 
-namespace LupaMD;
+namespace MdCodex;
 
 // Resaltado de sintaxis Markdown para el editor, con los colores del tema activo.
 public static class ResaltadoMarkdown

@@ -15,15 +15,15 @@ using ICSharpCode.AvalonEdit.Search;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 
-namespace LupaMD;
+namespace MdCodex;
 
 public partial class MainWindow : Window
 {
     private enum Modo { Vista, Dividido, Editor, Pro }
 
     // Host de la página del editor Pro, que vive en la carpeta Pro junto al .exe. No termina en
-    // ".lupamd" para no chocar con el filtro que sirve los archivos de los documentos.
-    private const string HostPro = "lupamd.editor";
+    // ".mdcodex" para no chocar con el filtro que sirve los archivos de los documentos.
+    private const string HostPro = "mdcodex.editor";
 
     private enum Panel { Explorador, Esquema }
 
@@ -94,7 +94,7 @@ public partial class MainWindow : Window
 
     private async Task IniciarVisorAsync()
     {
-        var datos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LupaMD", "WebView2");
+        var datos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MdCodex", "WebView2");
         var entorno = await CoreWebView2Environment.CreateAsync(userDataFolder: datos);
         _entorno = entorno;
         await Visor.EnsureCoreWebView2Async(entorno);
@@ -103,11 +103,13 @@ public partial class MainWindow : Window
         core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
         // Sin atajos del navegador: F5, Ctrl+W, etc. llegan a la ventana y no recargan la plantilla.
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        // Sin la burbuja con la URL al pasar sobre un enlace; la dirección se ve como tooltip (ver la plantilla).
+        core.Settings.IsStatusBarEnabled = false;
         core.NavigationStarting += Visor_NavigationStarting;
         // Imágenes y otros archivos relativos al documento. Se sirven a mano y no con
         // SetVirtualHostNameToFolderMapping, porque esa asignación solo vale para páginas cargadas
         // después de hacerla, y la plantilla se carga una sola vez.
-        core.AddWebResourceRequestedFilter("https://*.lupamd/*", CoreWebView2WebResourceContext.All);
+        core.AddWebResourceRequestedFilter("https://*.mdcodex/*", CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += (_, e) => e.Response = ServirArchivo(entorno, e.Request.Uri);
         core.NavigationCompleted += (_, _) =>
         {
@@ -267,9 +269,10 @@ public partial class MainWindow : Window
         var core = VisorPro.CoreWebView2;
         core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        core.Settings.IsStatusBarEnabled = false;
         // Esta asignación sí sirve aquí: se hace antes de cargar la página.
         core.SetVirtualHostNameToFolderMapping(HostPro, Path.Combine(AppContext.BaseDirectory, "Pro"), CoreWebView2HostResourceAccessKind.Allow);
-        core.AddWebResourceRequestedFilter("https://*.lupamd/*", CoreWebView2WebResourceContext.All);
+        core.AddWebResourceRequestedFilter("https://*.mdcodex/*", CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += (_, e) => e.Response = ServirArchivo(entorno, e.Request.Uri);
         core.NavigationStarting += (_, e) =>
         {
@@ -330,7 +333,7 @@ public partial class MainWindow : Window
     {
         if (!_proListo)
             return;
-        var resultado = await VisorPro.CoreWebView2.ExecuteScriptAsync("window.lupamd.pendiente()");
+        var resultado = await VisorPro.CoreWebView2.ExecuteScriptAsync("window.mdcodex.pendiente()");
         using var json = JsonDocument.Parse(resultado);
         if (json.RootElement.ValueKind == JsonValueKind.Object)
             AplicarDesdePro(json.RootElement);
@@ -406,7 +409,7 @@ public partial class MainWindow : Window
         string? local = null;
         if (destino.IsFile)
             local = destino.LocalPath;
-        else if (destino.Host.EndsWith(".lupamd", StringComparison.OrdinalIgnoreCase))
+        else if (destino.Host.EndsWith(".mdcodex", StringComparison.OrdinalIgnoreCase))
             local = RutaLocal(destino);
 
         if (local is not null && Directory.Exists(local))
@@ -617,7 +620,7 @@ public partial class MainWindow : Window
         var pregunta = modificadas.Count == 1
             ? $"¿Quieres guardar los cambios en {modificadas[0].Nombre}?"
             : $"Hay {modificadas.Count} archivos con cambios sin guardar:\n\n{string.Join("\n", modificadas.Select(p => "• " + p.Nombre))}\n\n¿Quieres guardarlos?";
-        return MessageBox.Show(this, pregunta, "Lupa MD", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning) switch
+        return MessageBox.Show(this, pregunta, "MD Codex", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning) switch
         {
             MessageBoxResult.Yes => modificadas.All(Guardar),
             MessageBoxResult.No => true,
@@ -645,8 +648,8 @@ public partial class MainWindow : Window
             return;
 
         if (p.Modificado && MessageBox.Show(this,
-                $"{p.Nombre} cambió fuera de Lupa MD.\n¿Quieres recargarlo? Perderás los cambios que no guardaste.",
-                "Lupa MD", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                $"{p.Nombre} cambió fuera de MD Codex.\n¿Quieres recargarlo? Perderás los cambios que no guardaste.",
+                "MD Codex", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             p.CambioRechazado = texto;
             return;
@@ -836,7 +839,7 @@ public partial class MainWindow : Window
 
     private void ActualizarTitulo()
     {
-        Title = _activa is null ? "Lupa MD" : $"{(_activa.Modificado ? "● " : "")}{_activa.Nombre} — Lupa MD";
+        Title = _activa is null ? "MD Codex" : $"{(_activa.Modificado ? "● " : "")}{_activa.Nombre} — MD Codex";
         TituloVentana.ToolTip = _activa?.Ruta;
     }
 
@@ -927,7 +930,7 @@ public partial class MainWindow : Window
     private static Pestana? PestanaDe(object sender) => (sender as FrameworkElement)?.DataContext as Pestana;
 
     private void Avisar(string mensaje) =>
-        MessageBox.Show(this, mensaje, "Lupa MD", MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageBox.Show(this, mensaje, "MD Codex", MessageBoxButton.OK, MessageBoxImage.Warning);
 
     // ---------- Eventos ----------
 
@@ -1113,8 +1116,10 @@ public partial class MainWindow : Window
             return;
         // El menú vive fuera del árbol de la ventana: sin destino, sus comandos no encuentran quién los atienda.
         // Desde el editor suben hasta la ventana, así sirven tanto Deshacer/Copiar como los comandos propios.
+        // Si el editor no está visible (o nunca se mostró, y aún no es parte de la ventana), el destino es la ventana.
+        IInputElement destino = Editor.IsVisible ? Editor.TextArea : this;
         foreach (var item in menu.Items.OfType<MenuItem>())
-            item.CommandTarget ??= Editor.TextArea;
+            item.CommandTarget = destino;
         menu.PlacementTarget = boton;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -1210,7 +1215,7 @@ public partial class MainWindow : Window
         if (_activa is not { Ruta: { } ruta } p)
             return;
         if (p.Modificado && MessageBox.Show(this, "¿Quieres descartar los cambios y recargar el archivo desde el disco?",
-                "Lupa MD", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                "MD Codex", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
         try

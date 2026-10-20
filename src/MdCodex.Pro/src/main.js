@@ -1,4 +1,4 @@
-// Editor "Pro" de Lupa MD: edición por bloques al estilo de Notion sobre Milkdown Crepe.
+// Editor "Pro" de MD Codex: edición por bloques al estilo de Notion sobre Milkdown Crepe.
 // La app es la dueña del documento: le envía el Markdown a cargar y recibe los cambios.
 import { Crepe } from '@milkdown/crepe';
 import { remarkStringifyOptionsCtx } from '@milkdown/kit/core';
@@ -113,7 +113,7 @@ function pendiente() {
 }
 
 // La app lo llama antes de guardar o cerrar, para no perder lo último que se escribió.
-window.lupamd = { pendiente: () => { clearTimeout(demora); return pendiente(); } };
+window.mdcodex = { pendiente: () => { clearTimeout(demora); return pendiente(); } };
 
 function cargar(m) {
   avisar(); // lo pendiente de la pestaña anterior

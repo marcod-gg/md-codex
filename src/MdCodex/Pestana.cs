@@ -4,7 +4,7 @@ using System.Text;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
 
-namespace LupaMD;
+namespace MdCodex;
 
 // Un documento abierto: su texto (con su propio historial de deshacer), el archivo en disco
 // y la posición en la que quedó el usuario.

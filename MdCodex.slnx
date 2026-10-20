@@ -1,5 +1,5 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/LupaMD/LupaMD.csproj" />
+    <Project Path="src/MdCodex/MdCodex.csproj" />
   </Folder>
 </Solution>

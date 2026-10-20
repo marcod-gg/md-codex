@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Navigation;
 
-namespace LupaMD;
+namespace MdCodex;
 
 public partial class AcercaDe : Window
 {

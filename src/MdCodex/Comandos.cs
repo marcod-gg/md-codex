@@ -1,6 +1,6 @@
 using System.Windows.Input;
 
-namespace LupaMD;
+namespace MdCodex;
 
 public static class Comandos
 {

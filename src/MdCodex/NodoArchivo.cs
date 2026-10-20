@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 
-namespace LupaMD;
+namespace MdCodex;
 
 // Elemento del árbol del Explorador. Las carpetas cargan su contenido al expandirse por primera vez.
 public sealed class NodoArchivo : INotifyPropertyChanged

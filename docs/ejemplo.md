@@ -1,4 +1,4 @@
-﻿# Ejemplo de Lupa MD
+﻿# Ejemplo de MD Codex
 
 Documento de prueba con **negrita**, *cursiva*, `código` y un [enlace externo](https://learn.microsoft.com) :smile:.
 
@@ -22,7 +22,7 @@ Documento de prueba con **negrita**, *cursiva*, `código` y un [enlace externo](
 > Una cita para ver el estilo.
 
 ```csharp
-Console.WriteLine("Hola, Lupa MD");
+Console.WriteLine("Hola, MD Codex");
 ```
 
 Texto con nota al pie.[^1]

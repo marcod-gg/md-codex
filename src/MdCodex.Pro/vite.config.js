@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: './',
   build: {
-    outDir: '../LupaMD/Pro',
+    outDir: '../MdCodex/Pro',
     emptyOutDir: true,
     assetsDir: 'recursos',
     target: 'es2022',

@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $colores = @{
     claro  = @{ Trazo = '#1F2328'; Fondo = '#F6F8FA' }   # para fondos claros
     oscuro = @{ Trazo = '#E6EDF3'; Fondo = '#0D1117' }   # para fondos oscuros
-    acento = @{ Trazo = '#FFFFFF'; Fondo = '#0078D4' }   # insignia con el azul de Lupa MD
+    acento = @{ Trazo = '#FFFFFF'; Fondo = '#0078D4' }   # insignia con el azul de MD Codex
 }
 function Color($hex) { [System.Drawing.ColorTranslator]::FromHtml($hex) }
 

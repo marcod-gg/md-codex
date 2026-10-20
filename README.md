@@ -1,4 +1,4 @@
-# Lupa MD
+# MD Codex
 
 Visor y editor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebView2, Markdig y AvalonEdit.
 
@@ -20,34 +20,34 @@ Visor y editor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebVi
 ## Uso
 
 ```powershell
-dotnet run --project src\LupaMD -- docs\ejemplo.md
+dotnet run --project src\MdCodex -- docs\ejemplo.md
 ```
 
-O, después de compilar con `dotnet build`, ejecutar directamente `src\LupaMD\bin\Debug\net10.0-windows10.0.19041.0\LupaMD.exe` (también se le pueden arrastrar archivos `.md` encima). Hay que cerrar la app antes de volver a compilar, porque Windows bloquea el `.exe` mientras está abierto.
+O, después de compilar con `dotnet build`, ejecutar directamente `src\MdCodex\bin\Debug\net10.0-windows10.0.19041.0\MdCodex.exe` (también se le pueden arrastrar archivos `.md` encima). Hay que cerrar la app antes de volver a compilar, porque Windows bloquea el `.exe` mientras está abierto.
 
 Para generar un ejecutable:
 
 ```powershell
-dotnet publish src\LupaMD -c Release -r win-x64 --self-contained false -o publicar
+dotnet publish src\MdCodex -c Release -r win-x64 --self-contained false -o publicar
 ```
 
 Requiere el runtime de WebView2, que ya viene incluido en Windows 10 y 11.
 
 ### Editor del modo Pro
 
-El editor web vive en `src\LupaMD.Pro` y su compilación ya está incluida en `src\LupaMD\Pro`, así que para compilar la app no hace falta Node.js. Solo si se modifica el editor:
+El editor web vive en `src\MdCodex.Pro` y su compilación ya está incluida en `src\MdCodex\Pro`, así que para compilar la app no hace falta Node.js. Solo si se modifica el editor:
 
 ```powershell
-cd src\LupaMD.Pro
+cd src\MdCodex.Pro
 npm install
-npm run build   # regenera src\LupaMD\Pro
+npm run build   # regenera src\MdCodex\Pro
 ```
 
 ## Repositorio
 
-- Código: [github.com/marcod-gg/lupa-md](https://github.com/marcod-gg/lupa-md)
-- Problemas y sugerencias: [issues](https://github.com/marcod-gg/lupa-md/issues)
+- Código: [github.com/marcod-gg/md-codex](https://github.com/marcod-gg/md-codex)
+- Problemas y sugerencias: [issues](https://github.com/marcod-gg/md-codex/issues)
 
 ---
 
-Desarrollado por **skolldev**.
+Desarrollado por **Marco González G.** · skolldev

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace LupaMD;
+namespace MdCodex;
 
 internal static class Nativo
 {

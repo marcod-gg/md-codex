@@ -1,7 +1,7 @@
 using System.Windows.Media;
 using Microsoft.Win32;
 
-namespace LupaMD;
+namespace MdCodex;
 
 // Colores de la ventana y del editor; la vista previa usa los mismos tonos desde su CSS.
 public sealed record Paleta(
