@@ -81,7 +81,12 @@ public static partial class Renderizador
         <meta charset="utf-8">
         <base>
         <title>MD Codex</title>
+        <link rel="stylesheet" href="https://{{Documentos.HostRecursos}}/highlight-claro.min.css" media="(prefers-color-scheme: light)">
+        <link rel="stylesheet" href="https://{{Documentos.HostRecursos}}/highlight-oscuro.min.css" media="(prefers-color-scheme: dark)">
         <style>{{Estilo}}</style>
+        <script src="https://{{Documentos.HostRecursos}}/highlight.min.js"></script>
+        <script src="https://{{Documentos.HostRecursos}}/highlight-powershell.min.js"></script>
+        <script src="https://{{Documentos.HostRecursos}}/highlight-dockerfile.min.js"></script>
         </head>
         <body>
         <main></main>
@@ -97,6 +102,7 @@ public static partial class Renderizador
               pestana = m.id;
               if (m.base) base.setAttribute('href', m.base); else base.removeAttribute('href');
               main.innerHTML = m.html;
+              resaltarCodigo();
               if (m.scroll != null) scrollTo(0, m.scroll);
             } else if (m.tipo === 'linea') {
               irALinea(m.linea);
@@ -121,6 +127,15 @@ public static partial class Renderizador
               chrome.webview.postMessage({ tipo: 'scroll', id: pestana, y: scrollY });
             }, 150);
           });
+
+          // Resaltado de los bloques con lenguaje (```csharp …). Sin lenguaje no se adivina: suele equivocarse.
+          if (window.hljs) hljs.configure({ ignoreUnescapedHTML: true });
+          function resaltarCodigo() {
+            if (!window.hljs) return;
+            for (const codigo of main.querySelectorAll('pre > code[class*="language-"]:not(.language-mermaid)')) {
+              try { hljs.highlightElement(codigo); } catch { /* lenguaje desconocido: queda sin color */ }
+            }
+          }
 
           // Sin la barra de estado del navegador, la dirección de un enlace se muestra como tooltip.
           document.addEventListener('mouseover', e => {
@@ -184,10 +199,13 @@ public static partial class Renderizador
         img { max-width: 100%; border-radius: 8px; }
         hr { border: 0; height: 1px; background: var(--borde); margin: 1.5em 0; }
         blockquote { padding: 0 1em; color: var(--cita); border-left: .25em solid var(--borde); }
-        code, kbd, pre { font-family: "Cascadia Code", Consolas, monospace; font-size: 85%; }
+        /* Cascadia Mono y no Code: sin ligaduras, el código se ve tal como está escrito (=> y no ⇒). */
+        code, kbd, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 85%; }
         code { background: var(--codigo); padding: .2em .4em; border-radius: 6px; }
         pre { background: var(--codigo); padding: 16px; border-radius: 8px; overflow: auto; line-height: 1.45; }
         pre code { background: none; padding: 0; font-size: 100%; }
+        /* El tema de highlight.js trae fondo y relleno propios; manda el del bloque. */
+        pre code.hljs { background: none; padding: 0; }
         kbd { border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 6px; padding: .1em .4em; }
         /* Bordes separados: con border-collapse las esquinas redondeadas no se dibujan. */
         table { border-collapse: separate; border-spacing: 0; display: block; width: max-content; max-width: 100%;

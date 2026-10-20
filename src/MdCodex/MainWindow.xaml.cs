@@ -210,7 +210,11 @@ public partial class MainWindow : Window
     // Traduce una URL virtual a un archivo dentro de su raíz; null si no corresponde o se sale de ella.
     private string? RutaLocal(Uri destino)
     {
-        if (!_carpetasPorHost.TryGetValue(destino.Host, out var raiz))
+        // Las librerías de la vista previa viven en la carpeta Vista junto al .exe.
+        var raiz = destino.Host.Equals(Documentos.HostRecursos, StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(AppContext.BaseDirectory, "Vista")
+            : _carpetasPorHost.GetValueOrDefault(destino.Host);
+        if (raiz is null)
             return null;
         var ruta = Path.GetFullPath(Path.Combine(raiz, Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'))));
         return Documentos.EstaDentro(ruta, raiz) ? ruta : null;

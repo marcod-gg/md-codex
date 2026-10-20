@@ -27,6 +27,8 @@
   <!-- Editor por bloques del modo Pro, compilado desde ..\MdCodex.Pro con "npm run build". -->
   <ItemGroup>
     <None Include="Pro\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Librerías de la vista previa (resaltado de código, diagramas), copiadas con "npm run vista". -->
+    <None Include="Vista\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

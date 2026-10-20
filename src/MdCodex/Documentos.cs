@@ -8,6 +8,9 @@ public static class Documentos
 {
     private static readonly string[] Extensiones = [".md", ".markdown", ".mdown", ".mkd", ".txt"];
 
+    // Host de las librerías de la vista previa (carpeta Vista junto al .exe).
+    public const string HostRecursos = "app.mdcodex";
+
     public static bool EsMarkdown(string ruta) =>
         Extensiones.Contains(Path.GetExtension(ruta), StringComparer.OrdinalIgnoreCase);
 

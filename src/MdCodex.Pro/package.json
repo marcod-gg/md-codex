@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "vista": "node scripts/copiar-vista.mjs"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +17,7 @@
     "@milkdown/crepe": "^7.22.3"
   },
   "devDependencies": {
+    "@highlightjs/cdn-assets": "^11.12.0",
     "vite": "^8.3.4"
   }
 }
