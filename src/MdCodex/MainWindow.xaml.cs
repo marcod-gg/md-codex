@@ -71,7 +71,12 @@ public partial class MainWindow : Window
         PreviewDragOver += Ventana_PreviewDragOver;
         PreviewDrop += Ventana_PreviewDrop;
         StateChanged += (_, _) => AjustarMaximizado();
-        SourceInitialized += (_, _) => Nativo.RedondearEsquinas(new WindowInteropHelper(this).Handle);
+        SourceInitialized += (_, _) =>
+        {
+            var ventana = new WindowInteropHelper(this).Handle;
+            Nativo.RedondearEsquinas(ventana);
+            HwndSource.FromHwnd(ventana).AddHook(GanchoVentana);
+        };
         AreaTrabajo.SizeChanged += (_, _) => RecortarAreaTrabajo();
 
         AplicarTema();
@@ -862,6 +867,63 @@ public partial class MainWindow : Window
     }
 
     // ---------- Ventana y tema ----------
+
+    // Snap Layouts de Windows 11: el menú de diseños aparece cuando la ventana dice que el cursor
+    // está sobre "su" botón de maximizar (HTMAXBUTTON). Con la barra de título propia hay que decirlo
+    // a mano, y entonces el clic y el resaltado del botón también corren por cuenta de la app.
+    private IntPtr GanchoVentana(IntPtr ventana, int mensaje, IntPtr wParam, IntPtr lParam, ref bool atendido)
+    {
+        switch (mensaje)
+        {
+            case Nativo.WmNcHitTest:
+                var sobre = SobreMaximizar(lParam);
+                ResaltarMaximizar(ventana, sobre);
+                if (sobre)
+                {
+                    atendido = true;
+                    return Nativo.HtMaxButton;
+                }
+                break;
+            case Nativo.WmNcLButtonDown when wParam == Nativo.HtMaxButton:
+                atendido = true; // sin esto, Windows dibuja su propio botón clásico encima
+                break;
+            case Nativo.WmNcLButtonUp when wParam == Nativo.HtMaxButton:
+                atendido = true;
+                Maximizar_Click(BotonMaximizar, new RoutedEventArgs());
+                break;
+            case Nativo.WmNcMouseLeave:
+                ResaltarMaximizar(ventana, false);
+                break;
+        }
+        return IntPtr.Zero;
+    }
+
+    private bool SobreMaximizar(IntPtr lParam)
+    {
+        if (!BotonMaximizar.IsVisible)
+            return false;
+        var (x, y) = Nativo.PuntoDe(lParam);
+        var punto = BotonMaximizar.PointFromScreen(new Point(x, y));
+        return punto.X >= 0 && punto.Y >= 0 && punto.X < BotonMaximizar.ActualWidth && punto.Y < BotonMaximizar.ActualHeight;
+    }
+
+    // WPF no ve el mouse sobre el botón (Windows lo trata como parte del marco), así que el resaltado es manual.
+    private bool _maximizarResaltado;
+    private void ResaltarMaximizar(IntPtr ventana, bool resaltar)
+    {
+        if (_maximizarResaltado == resaltar)
+            return;
+        _maximizarResaltado = resaltar;
+        if (resaltar)
+        {
+            BotonMaximizar.SetResourceReference(BackgroundProperty, "Chrome.Hover");
+            Nativo.SeguirSalidaNoCliente(ventana);
+        }
+        else
+        {
+            BotonMaximizar.ClearValue(BackgroundProperty);
+        }
+    }
 
     // Con WindowChrome, una ventana maximizada se sale de la pantalla por el grosor del borde.
     private void AjustarMaximizado()
