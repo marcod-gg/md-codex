@@ -1,0 +1,48 @@
+# Al subir un tag vX.Y.Z, compila el instalador y lo adjunta a la release de GitHub.
+# Si la release no existe, la crea con el mensaje del tag como notas.
+name: Publicar versión
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  instalador:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Comprobar versión
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content src\MdCodex\MdCodex.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ("v$version" -ne '${{ github.ref_name }}') { throw "El tag ${{ github.ref_name }} no coincide con la versión del proyecto ($version)" }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Construir instalador
+        shell: pwsh
+        run: .\instalador\construir.ps1
+
+      - name: Adjuntar a la release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $exe = "publicar\MDCodex-$env:VERSION-instalador.exe"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $exe --clobber
+          } else {
+            gh release create $tag $exe --title "MD Codex $env:VERSION" --notes-from-tag
+          }

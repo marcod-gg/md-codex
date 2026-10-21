@@ -18,6 +18,8 @@
     <PackageProjectUrl>https://github.com/marcod-gg/md-codex</PackageProjectUrl>
     <!-- Generado con marca\generar-icono-app.ps1 -->
     <ApplicationIcon>Recursos\mdcodex.ico</ApplicationIcon>
+    <!-- Fuente web (Vite, node_modules): no es parte de la compilación de .NET. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Web\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,7 +29,7 @@
     <Resource Include="Recursos\skolldev-silueta.png" />
   </ItemGroup>
 
-  <!-- Editor por bloques del modo Pro, compilado desde ..\MdCodex.Pro con "npm run build". -->
+  <!-- Editor por bloques del modo Pro, compilado desde Web con "npm run build". -->
   <ItemGroup>
     <None Include="Pro\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Librerías de la vista previa (resaltado de código, diagramas), copiadas con "npm run vista". -->

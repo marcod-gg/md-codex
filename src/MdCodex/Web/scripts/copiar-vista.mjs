@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
-const destino = join(raiz, '..', 'MdCodex', 'Vista');
+const destino = join(raiz, '..', 'Vista');
 const modulos = join(raiz, 'node_modules');
 
 const archivos = [

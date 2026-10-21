@@ -44,12 +44,23 @@ Publica la app con el runtime de .NET incluido y la empaqueta con [Inno Setup 6]
 
 El ícono de la app se genera con `marca\generar-icono-app.ps1`.
 
-### Editor del modo Pro
+### Publicar una versión
 
-El editor web vive en `src\MdCodex.Pro` y su compilación ya está incluida en `src\MdCodex\Pro`, así que para compilar la app no hace falta Node.js. Solo si se modifica el editor:
+Cada release de GitHub incluye el instalador, compilado por GitHub Actions (`.github\workflows\publicar.yml`). Basta con subir `<Version>` en `src\MdCodex\MdCodex.csproj`, hacer commit y subir un tag con la misma versión:
 
 ```powershell
-cd src\MdCodex.Pro
+git tag -a v1.2.1 -m "Notas de la versión (en Markdown)"
+git push origin main v1.2.1
+```
+
+Si la release no existe, se crea con el mensaje del tag como notas; si ya existe (por ejemplo, un borrador escrito en GitHub), solo se le adjunta el `.exe`.
+
+### Editor del modo Pro
+
+El editor web vive en `src\MdCodex\Web` y su compilación ya está incluida en `src\MdCodex\Pro`, así que para compilar la app no hace falta Node.js. Solo si se modifica el editor:
+
+```powershell
+cd src\MdCodex\Web
 npm install
 npm run build   # regenera src\MdCodex\Pro
 ```
