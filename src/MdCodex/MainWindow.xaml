@@ -119,7 +119,8 @@
         <CommandBinding Command="{x:Static local:Comandos.AbrirCarpeta}" Executed="AbrirCarpeta_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.ModoEditor}" Executed="ModoEditor_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.ModoPro}" Executed="ModoPro_Executed" />
-        <CommandBinding Command="{x:Static local:Comandos.VistaPrevia}" Executed="VistaPrevia_Executed" />
+        <CommandBinding Command="{x:Static local:Comandos.VistaPrevia}" Executed="VistaPrevia_Executed" CanExecute="ModoEditor_CanExecute" />
+        <CommandBinding Command="{x:Static local:Comandos.AnchoCompleto}" Executed="AnchoCompleto_Executed" CanExecute="ModoPro_CanExecute" />
         <!-- Editar en el modo por bloques: lo que el editor de texto atiende solo se pasa a la página -->
         <CommandBinding Command="Undo" Executed="EdicionPro_Executed" CanExecute="EdicionPro_CanExecute" />
         <CommandBinding Command="Redo" Executed="EdicionPro_Executed" CanExecute="EdicionPro_CanExecute" />
@@ -230,10 +231,14 @@
                     <Button Style="{StaticResource BotonMenu}" Content="_Ver" Click="AbrirMenu_Click">
                         <Button.ContextMenu>
                             <ContextMenu>
-                        <MenuItem Header="_Editor" Command="{x:Static local:Comandos.ModoEditor}" InputGestureText="Ctrl+1" />
+                        <MenuItem Header="_Modo">
+                            <MenuItem x:Name="MenuModoEditor" Header="_Editor" Command="{x:Static local:Comandos.ModoEditor}" InputGestureText="Ctrl+1" />
+                            <MenuItem x:Name="MenuModoPro" Header="_Por bloques" Command="{x:Static local:Comandos.ModoPro}" InputGestureText="Ctrl+2" />
+                        </MenuItem>
+                        <!-- Cada una solo en su modo: la vista previa en Editor, el ancho en Por bloques -->
                         <MenuItem x:Name="MenuVistaPrevia" Header="_Vista previa" Command="{x:Static local:Comandos.VistaPrevia}"
-                                  InputGestureText="Ctrl+Mayús+V" IsCheckable="False" />
-                        <MenuItem Header="_Por bloques" Command="{x:Static local:Comandos.ModoPro}" InputGestureText="Ctrl+2" />
+                                  InputGestureText="Ctrl+Mayús+V" />
+                        <MenuItem x:Name="MenuAnchoCompleto" Header="_Ancho completo" Command="{x:Static local:Comandos.AnchoCompleto}" />
                         <Separator />
                         <!-- Herramientas de la barra lateral: marcadas, se ven (su ícono y su panel) -->
                         <MenuItem x:Name="MenuVerDocumentos" Header="_Documentos" IsCheckable="True" Click="Herramienta_Click" />
@@ -613,12 +618,6 @@
                                         <TextBlock Text="Vista previa" />
                                     </StackPanel>
                                 </RadioButton>
-                                <RadioButton GroupName="Categoria" Tag="SeccionBloques" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE8FD;" Style="{StaticResource IconoCategoria}" />
-                                        <TextBlock Text="Editor por bloques" />
-                                    </StackPanel>
-                                </RadioButton>
                                 <RadioButton x:Name="CategoriaImagenes" GroupName="Categoria" Tag="SeccionImagenes" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#xEB9F;" Style="{StaticResource IconoCategoria}" />
@@ -737,14 +736,6 @@
                                                 <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="En Editor y vista, al desplazar uno el otro lo sigue." />
                                             </StackPanel>
                                         </DockPanel>
-                                    </StackPanel>
-
-                                    <StackPanel x:Name="SeccionBloques" Visibility="Collapsed">
-                                        <TextBlock Text="Ancho del texto" FontSize="13" />
-                                        <ComboBox x:Name="SelectorAnchoBloques" Style="{StaticResource Selector}" Margin="0,6,0,0" SelectionChanged="Selector_SelectionChanged">
-                                            <ComboBoxItem Tag="Compacto" Content="Compacto, centrado" />
-                                            <ComboBoxItem Tag="Completo" Content="Todo el ancho" />
-                                        </ComboBox>
                                     </StackPanel>
 
                                     <StackPanel x:Name="SeccionImagenes" Visibility="Collapsed">

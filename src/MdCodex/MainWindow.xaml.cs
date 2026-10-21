@@ -1560,10 +1560,14 @@ public partial class MainWindow : Window
             if (_modo == Modo.Pro && modo != Modo.Pro)
                 _ = SincronizarProAsync();
 
+            // Mostrar u ocultar la vista previa con un documento abierto se anima; cambiar de modo, no.
+            var animar = _activa is not null && _modo is Modo.Dividido or Modo.Editor
+                && modo is Modo.Dividido or Modo.Editor && modo != _modo;
             _modo = modo;
-            BotonEditor.IsChecked = modo is Modo.Dividido or Modo.Editor;
-            BotonPro.IsChecked = modo == Modo.Pro;
+            BotonEditor.IsChecked = MenuModoEditor.IsChecked = modo is Modo.Dividido or Modo.Editor;
+            BotonPro.IsChecked = MenuModoPro.IsChecked = modo == Modo.Pro;
             BotonVistaPrevia.IsChecked = MenuVistaPrevia.IsChecked = modo == Modo.Dividido;
+            MenuAnchoCompleto.IsChecked = Config.AnchoBloques == Ancho.Completo;
             EstadoModo.Content = modo switch
             {
                 Modo.Dividido => "Editor y vista previa",
@@ -1571,6 +1575,8 @@ public partial class MainWindow : Window
                 _ => "Por bloques",
             };
             AplicarDisposicion();
+            if (animar)
+                AnimarVistaPrevia(modo == Modo.Dividido);
 
             if (_activa is not null && modo is Modo.Dividido or Modo.Editor)
                 Dispatcher.BeginInvoke(() => Editor.TextArea.Focus(), DispatcherPriority.Input);
@@ -1610,6 +1616,36 @@ public partial class MainWindow : Window
         EstadoCodificacion.Visibility = Visible(hayDocumento);
         EstadoFinLinea.Visibility = Visible(hayDocumento);
         EstadoLenguaje.Visibility = Visible(hayDocumento);
+    }
+
+    // Proporción de la columna de la vista previa, en estrellas: va de 0 a 1 (o al revés) al mostrarla u ocultarla.
+    private static readonly DependencyProperty ProporcionVistaProperty = DependencyProperty.Register(
+        "ProporcionVista", typeof(double), typeof(MainWindow),
+        new PropertyMetadata(1.0, (d, e) => ((MainWindow)d).ColumnaVista.Width = new GridLength((double)e.NewValue, GridUnitType.Star)));
+
+    // La vista previa se abre o se cierra deslizándose junto al editor; al terminar, la disposición queda la del modo.
+    // Solo se anima la columna: WebView2 se cae si se redimensiona cuadro a cuadro, así que la vista conserva su
+    // ancho final (la columna la recorta) y se ajusta una sola vez al terminar.
+    private void AnimarVistaPrevia(bool mostrar)
+    {
+        Visor.Width = Math.Max(1, mostrar ? (AreaTrabajo.ActualWidth - Divisor.Width) / 2 : Visor.ActualWidth);
+        Visor.HorizontalAlignment = HorizontalAlignment.Left;
+        if (mostrar)
+            ColumnaVista.Width = new GridLength(0, GridUnitType.Star);
+        Visor.Visibility = Visibility.Visible;
+        Divisor.Visibility = Visibility.Visible;
+        var animacion = new DoubleAnimation(mostrar ? 0 : 1, mostrar ? 1 : 0, TimeSpan.FromMilliseconds(240))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+        };
+        animacion.Completed += (_, _) =>
+        {
+            BeginAnimation(ProporcionVistaProperty, null);
+            Visor.Width = double.NaN;
+            Visor.HorizontalAlignment = HorizontalAlignment.Stretch;
+            AplicarDisposicion();
+        };
+        BeginAnimation(ProporcionVistaProperty, animacion);
     }
 
     // Border no recorta su contenido: sin esto, el editor y la vista se saldrían por las esquinas redondeadas.
@@ -2070,7 +2106,7 @@ public partial class MainWindow : Window
         // Desde el editor suben hasta la ventana, así sirven tanto Deshacer/Copiar como los comandos propios.
         // Si el editor no está visible (o nunca se mostró, y aún no es parte de la ventana), el destino es la ventana.
         IInputElement destino = Editor.IsVisible ? Editor.TextArea : this;
-        foreach (var item in menu.Items.OfType<MenuItem>())
+        foreach (var item in Items(menu.Items))
             item.CommandTarget = destino;
         if (menu.Items.Contains(MenuRecientes))
             RellenarRecientes();
@@ -2078,6 +2114,10 @@ public partial class MainWindow : Window
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
     }
+
+    // Los elementos de un menú con los de sus submenús (Ver → Modo).
+    private static IEnumerable<MenuItem> Items(ItemCollection items) =>
+        items.OfType<MenuItem>().SelectMany(i => Items(i.Items).Prepend(i));
 
     private void AcercaDe_Click(object sender, RoutedEventArgs e) => new AcercaDe { Owner = this }.ShowDialog();
 
@@ -2476,13 +2516,26 @@ public partial class MainWindow : Window
 
     private void ModoEditor_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(ModoEditor());
 
-    // Ctrl+Mayús+V o el botón junto a Editor: muestra u oculta la vista previa (desde Por bloques, vuelve al
-    // editor con la vista previa). Se recuerda.
+    // Ctrl+Mayús+V, el botón junto a Editor o Ver → Vista previa: muestra u oculta la vista previa del editor.
+    // Se recuerda.
     private void VistaPrevia_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         Config.VistaPrevia = _modo != Modo.Dividido;
         _recientes.Guardar();
         AplicarModo(ModoEditor());
+    }
+
+    private void ModoEditor_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _modo != Modo.Pro;
+
+    private void ModoPro_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _modo == Modo.Pro;
+
+    // Ver → Ancho completo, solo en el modo por bloques: texto centrado con un ancho cómodo, o todo el ancho.
+    private void AnchoCompleto_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        Config.AnchoBloques = Config.AnchoBloques == Ancho.Completo ? Ancho.Compacto : Ancho.Completo;
+        _recientes.Guardar();
+        MenuAnchoCompleto.IsChecked = Config.AnchoBloques == Ancho.Completo;
+        EnviarAnchoPro();
     }
 
     // ---------- Editar en el modo por bloques ----------
@@ -2630,7 +2683,7 @@ public partial class MainWindow : Window
     private void Categoria_Checked(object sender, RoutedEventArgs e)
     {
         var categoria = (RadioButton)sender;
-        foreach (var seccion in new[] { SeccionGeneral, SeccionEditor, SeccionEspacios, SeccionVista, SeccionBloques, SeccionImagenes })
+        foreach (var seccion in new[] { SeccionGeneral, SeccionEditor, SeccionEspacios, SeccionVista, SeccionImagenes })
             seccion.Visibility = Visible(seccion.Name == (string)categoria.Tag);
         TituloCategoria.Text = ((TextBlock)((StackPanel)categoria.Content).Children[1]).Text;
     }
@@ -2644,7 +2697,6 @@ public partial class MainWindow : Window
         Seleccionar(SelectorCambioExterno, Config.CambioExterno);
         Seleccionar(SelectorGuardado, Config.GuardadoAutomatico);
         Seleccionar(SelectorAnchoVista, Config.AnchoVista);
-        Seleccionar(SelectorAnchoBloques, Config.AnchoBloques);
         OpcionReabrirSesion.IsChecked = Config.ReabrirSesion;
         OpcionBuscarActualizaciones.IsChecked = Config.BuscarActualizaciones;
         OpcionAjustarLineas.IsChecked = Config.AjustarLineas;
@@ -2708,10 +2760,6 @@ public partial class MainWindow : Window
             case nameof(SelectorAnchoVista):
                 Config.AnchoVista = Enum.Parse<Ancho>(valor);
                 EnviarAncho();
-                break;
-            case nameof(SelectorAnchoBloques):
-                Config.AnchoBloques = Enum.Parse<Ancho>(valor);
-                EnviarAnchoPro();
                 break;
         }
         _recientes.Guardar();

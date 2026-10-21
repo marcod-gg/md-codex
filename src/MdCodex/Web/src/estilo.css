@@ -71,9 +71,13 @@ html, body {
   margin: 0 auto;
 }
 
-/* Configuración "Todo el ancho". */
+/* Ver → Ancho completo. Con un valor (no "none") el cambio se puede animar. */
 body.completo #editor {
-  max-width: none;
+  max-width: 100%;
+}
+
+body.animado #editor {
+  transition: max-width 0.28s ease-in-out;
 }
 
 /* Crepe dibuja tablas, separadores y citas con su color de contorno casi transparente, y numera las
