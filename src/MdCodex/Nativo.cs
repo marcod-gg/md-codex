@@ -42,6 +42,40 @@ internal static class Nativo
         return ((short)(valor & 0xFFFF), (short)((valor >> 16) & 0xFFFF));
     }
 
+    // Rectángulo en píxeles físicos de la pantalla.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rectangulo
+    {
+        public int Izquierda, Arriba, Derecha, Abajo;
+        public readonly int Ancho => Derecha - Izquierda;
+        public readonly int Alto => Abajo - Arriba;
+    }
+
+    public static Rectangulo RectanguloVentana(IntPtr ventana)
+    {
+        _ = GetWindowRect(ventana, out var rect);
+        return rect;
+    }
+
+    // Área de trabajo (la pantalla sin la barra de tareas) del monitor donde está la ventana.
+    public static Rectangulo AreaDeTrabajo(IntPtr ventana)
+    {
+        var info = new InfoMonitor { Tamano = (uint)Marshal.SizeOf<InfoMonitor>() };
+        _ = GetMonitorInfo(MonitorFromWindow(ventana, MonitorDefaultToNearest), ref info);
+        return info.Trabajo;
+    }
+
+    private const uint MonitorDefaultToNearest = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct InfoMonitor
+    {
+        public uint Tamano;
+        public Rectangulo Monitor;
+        public Rectangulo Trabajo;
+        public uint Banderas;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct TrackMouseEventDatos
     {
@@ -56,4 +90,13 @@ internal static class Nativo
 
     [DllImport("user32.dll")]
     private static extern bool TrackMouseEvent(ref TrackMouseEventDatos datos);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr ventana, out Rectangulo rect);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr ventana, uint banderas);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref InfoMonitor info);
 }

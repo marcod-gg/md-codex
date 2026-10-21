@@ -18,6 +18,7 @@
     <PackageProjectUrl>https://github.com/marcod-gg/md-codex</PackageProjectUrl>
     <!-- Generado con marca\generar-icono-app.ps1 -->
     <ApplicationIcon>Recursos\mdcodex.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Fuente web (Vite, node_modules): no es parte de la compilación de .NET. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);Web\**</DefaultItemExcludes>
   </PropertyGroup>

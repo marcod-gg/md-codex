@@ -92,8 +92,12 @@ public partial class MainWindow : Window
         PreviewDrop += Ventana_PreviewDrop;
         PreviewMouseDown += Ventana_PreviewMouseDown;
         StateChanged += (_, _) => AjustarMaximizado();
+        // Maximizada, pasar a otro monitor (Win+Mayús+flecha) cambia el marco y la escala.
+        LocationChanged += (_, _) => { if (WindowState == WindowState.Maximized) AjustarMaximizado(); };
+        DpiChanged += (_, _) => { if (WindowState == WindowState.Maximized) AjustarMaximizado(); };
         SourceInitialized += (_, _) =>
         {
+            AjustarAPantalla();
             var ventana = new WindowInteropHelper(this).Handle;
             Nativo.RedondearEsquinas(ventana);
             HwndSource.FromHwnd(ventana).AddHook(GanchoVentana);
@@ -1448,13 +1452,45 @@ public partial class MainWindow : Window
         }
     }
 
-    // Con WindowChrome, una ventana maximizada se sale de la pantalla por el grosor del borde.
+    // Con WindowChrome, una ventana maximizada se sale del área de trabajo por el grosor del marco,
+    // que cambia con la escala del monitor. El margen se mide (ventana contra área de trabajo) para
+    // que el contenido calce justo y la barra de estado no quede bajo la barra de tareas.
     private void AjustarMaximizado()
     {
         var maximizada = WindowState == WindowState.Maximized;
-        Raiz.Margin = maximizada ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
+        Raiz.Margin = maximizada ? MargenMaximizada() : new Thickness(0);
         BotonMaximizar.Content = maximizada ? "\uE923" : "\uE922";
         BotonMaximizar.ToolTip = maximizada ? "Restaurar" : "Maximizar";
+    }
+
+    private Thickness MargenMaximizada()
+    {
+        var ventana = new WindowInteropHelper(this).Handle;
+        var marco = Nativo.RectanguloVentana(ventana);
+        var trabajo = Nativo.AreaDeTrabajo(ventana);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        return new Thickness(
+            Math.Max(0, trabajo.Izquierda - marco.Izquierda) / dpi.DpiScaleX,
+            Math.Max(0, trabajo.Arriba - marco.Arriba) / dpi.DpiScaleY,
+            Math.Max(0, marco.Derecha - trabajo.Derecha) / dpi.DpiScaleX,
+            Math.Max(0, marco.Abajo - trabajo.Abajo) / dpi.DpiScaleY);
+    }
+
+    // En pantallas chicas el tamaño inicial no cabe: la ventana se achica al área de trabajo
+    // (con un margen) y se centra en ella, así la barra de título queda a la vista.
+    private void AjustarAPantalla()
+    {
+        const double margen = 24;
+        var trabajo = Nativo.AreaDeTrabajo(new WindowInteropHelper(this).Handle);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var ancho = trabajo.Ancho / dpi.DpiScaleX;
+        var alto = trabajo.Alto / dpi.DpiScaleY;
+        if (Width <= ancho - 2 * margen && Height <= alto - 2 * margen)
+            return;
+        Width = Math.Max(MinWidth, Math.Min(Width, ancho - 2 * margen));
+        Height = Math.Max(MinHeight, Math.Min(Height, alto - 2 * margen));
+        Left = trabajo.Izquierda / dpi.DpiScaleX + (ancho - Width) / 2;
+        Top = trabajo.Arriba / dpi.DpiScaleY + (alto - Height) / 2;
     }
 
     private void AplicarTema()
