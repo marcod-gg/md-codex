@@ -35,6 +35,9 @@ internal static class Nativo
         _ = TrackMouseEvent(ref seguimiento);
     }
 
+    // Tiempo máximo entre los dos clics de un doble clic, según la configuración de Windows.
+    public static TimeSpan TiempoDobleClic => TimeSpan.FromMilliseconds(GetDoubleClickTime());
+
     // Coordenadas de pantalla (con signo, por los monitores a la izquierda o arriba del principal) de un lParam.
     public static (int X, int Y) PuntoDe(IntPtr lParam)
     {
@@ -90,6 +93,9 @@ internal static class Nativo
 
     [DllImport("user32.dll")]
     private static extern bool TrackMouseEvent(ref TrackMouseEventDatos datos);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr ventana, out Rectangulo rect);

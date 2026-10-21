@@ -85,11 +85,6 @@ public partial class MainWindow : Window
 
         BarraPestanas.ItemsSource = _pestanas;
         _pestanas.CollectionChanged += (_, _) => ActualizarDocumentos();
-        ArbolDocumentos.MouseLeave += (_, _) =>
-        {
-            if (_documentosPendientes)
-                ActualizarDocumentos();
-        };
         Editor.Document = _sinDocumento;
         _demoraDocumento = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
         _demoraDocumento.Tick += (_, _) => ActualizarDocumento();
@@ -899,9 +894,13 @@ public partial class MainWindow : Window
         var indiceActiva = _activa is null ? -1 : _pestanas.IndexOf(_activa);
         foreach (var p in cerrar)
         {
+            // Lo que se cierra queda primero en Recientes (y vuelve a verse en el panel Documentos).
+            if (p.Ruta is { } ruta)
+                _recientes.AgregarArchivo(ruta);
             _pestanas.Remove(p);
             p.Dispose();
         }
+        _recientes.Guardar();
 
         if (_activa is not null && !_pestanas.Contains(_activa))
         {
@@ -1246,23 +1245,40 @@ public partial class MainWindow : Window
     // Panel Documentos: los abiertos que no están en ningún espacio de trabajo y los recientes, agrupados.
     // Se rehace solo (sin tocar el árbol de espacios) al abrir o cerrar pestañas y al cambiar los recientes.
     private readonly NodoArchivo _documentos = NodoArchivo.DeDocumentos();
-    // Cambios que esperan a que el mouse salga del panel (ver ActualizarDocumentos).
-    private bool _documentosPendientes;
+    // Actualización del panel que espera a que pase un posible doble clic (ver ActualizarDocumentos).
+    private DispatcherTimer? _documentosDiferidos;
 
     private void ActualizarDocumentos()
     {
-        // Abrir un documento lo sube en Recientes. Si el panel se rehiciera bajo el mouse, el segundo clic de
-        // un doble clic caería en otra fila (u otro documento) y la pestaña quedaría temporal: se espera a que
-        // el mouse salga del panel.
+        // Abrir un documento lo pasa de Recientes a Abiertos. Si el panel se rehiciera bajo el mouse justo
+        // después del primer clic, el segundo caería en otra fila (u otro documento) y la pestaña quedaría
+        // temporal: se espera lo que dura un doble clic.
         if (ArbolDocumentos.IsMouseOver)
         {
-            _documentosPendientes = true;
+            if (_documentosDiferidos is null)
+            {
+                _documentosDiferidos = new DispatcherTimer { Interval = Nativo.TiempoDobleClic + TimeSpan.FromMilliseconds(100) };
+                _documentosDiferidos.Tick += (_, _) =>
+                {
+                    _documentosDiferidos.Stop();
+                    LlenarDocumentos();
+                };
+            }
+            Reiniciar(_documentosDiferidos);
             RevelarActual();
             return;
         }
-        _documentosPendientes = false;
+        LlenarDocumentos();
+    }
+
+    // Abiertos: los que no están en un espacio de trabajo (esos se ven en su árbol). Recientes: los que no
+    // están abiertos; al cerrar uno vuelve ahí.
+    private void LlenarDocumentos()
+    {
+        _documentosDiferidos?.Stop();
+        var abiertas = _pestanas.Where(p => p.Ruta is not null).Select(p => p.Ruta!).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var abiertos = _pestanas.Where(p => p.Ruta is not null && RaizDe(p.Ruta) is null).Select(p => p.Ruta!);
-        _documentos.LlenarDocumentos(abiertos, _recientes.Archivos);
+        _documentos.LlenarDocumentos(abiertos, _recientes.Archivos.Where(r => !abiertas.Contains(r)));
         ArbolDocumentos.ItemsSource ??= _documentos.Hijos;
         DocumentosVacio.Visibility = Visible(_documentos.Hijos.Count == 0);
         RevelarActual();
