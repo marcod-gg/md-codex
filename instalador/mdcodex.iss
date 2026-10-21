@@ -33,7 +33,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 ChangesAssociations=yes
 CloseApplications=yes
-; La app se reabre desde [Run] (con /REABRIR=1), no por el reinicio de aplicaciones de Windows.
+; La app se reabre desde [Code] (con /REABRIR=1), no por el reinicio de aplicaciones de Windows.
 RestartApplications=no
 Compression=lzma2/max
 SolidCompression=yes
@@ -71,8 +71,6 @@ Root: HKA; Subkey: "Software\Classes\Applications\{#Ejecutable}\SupportedTypes";
 [Run]
 Filename: "{app}\{#Ejecutable}"; Description: "Abrir {#Nombre}"; Flags: nowait postinstall skipifsilent
 Filename: "ms-settings:defaultapps"; Description: "Elegir {#Nombre} como app predeterminada para .md"; Flags: shellexec nowait postinstall skipifsilent unchecked; Tasks: asociar
-; Actualización desde la app ("Reiniciar ahora"): instala en silencio y la vuelve a abrir.
-Filename: "{app}\{#Ejecutable}"; Flags: nowait runasoriginaluser; Check: Reabrir
 
 [Code]
 // MD Codex usa WebView2 para la vista previa. Viene con Windows 11 y con Edge en Windows 10,
@@ -88,9 +86,45 @@ begin
   Result := Result and (Version <> '') and (Version <> '0.0.0.0');
 end;
 
+// Actualización desde la app: se ejecuta con /SILENT, que solo muestra la página de progreso.
+// Esa ventana pasa a decir "Actualizando MD Codex", sin botón Cancelar.
 function Reabrir(): Boolean;
 begin
   Result := ExpandConstant('{param:REABRIR|0}') = '1';
+end;
+
+procedure InitializeWizard();
+begin
+  if WizardSilent() then
+  begin
+    WizardForm.Caption := 'Actualizando {#Nombre}';
+    WizardForm.CancelButton.Visible := False;
+  end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if WizardSilent() and (CurPageID = wpInstalling) then
+  begin
+    WizardForm.PageNameLabel.Caption := 'Actualizando {#Nombre}';
+    WizardForm.PageDescriptionLabel.Caption := 'Espera un momento mientras se instala la versión {#Version}.';
+  end;
+end;
+
+// Con /REABRIR=1 (botón "Reiniciar ahora"), al terminar avisa que abre la app, la abre y deja
+// el aviso un momento a la vista antes de cerrarse.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Codigo: Integer;
+begin
+  if (CurStep = ssPostInstall) and Reabrir() then
+  begin
+    WizardForm.StatusLabel.Caption := 'Abriendo {#Nombre}…';
+    WizardForm.FilenameLabel.Caption := '';
+    WizardForm.Refresh();
+    ExecAsOriginalUser(ExpandConstant('{app}\{#Ejecutable}'), '', '', SW_SHOWNORMAL, ewNoWait, Codigo);
+    Sleep(1500);
+  end;
 end;
 
 function InitializeSetup(): Boolean;

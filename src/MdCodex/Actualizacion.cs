@@ -91,9 +91,10 @@ public static class Actualizacion
         return destino;
     }
 
-    // Ejecuta el instalador sin ventanas; con reabrir, el instalador vuelve a abrir la app al terminar.
+    // Ejecuta el instalador sin preguntas, solo con la ventana "Actualizando MD Codex" y su progreso;
+    // con reabrir, el instalador vuelve a abrir la app al terminar.
     // Se llama al cerrar la app, para que el instalador pueda reemplazar sus archivos.
     public static void Instalar(string instalador, bool reabrir) =>
         Process.Start(new ProcessStartInfo(instalador,
-            "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" + (reabrir ? " /REABRIR=1" : "")) { UseShellExecute = true });
+            "/SILENT /SUPPRESSMSGBOXES /NORESTART" + (reabrir ? " /REABRIR=1" : "")) { UseShellExecute = true });
 }
