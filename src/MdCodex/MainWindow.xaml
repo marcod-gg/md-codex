@@ -206,8 +206,9 @@
                         <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
                               StrokeThickness="1" Data="M1.5,2.5 H14.5 V13.5 H1.5 Z M5.5,2.5 V13.5" Width="16" Height="16" />
                     </ToggleButton>
+                    <!-- Abre la ventana de configuración (queda marcado mientras está abierta) -->
                     <ToggleButton x:Name="ActividadConfiguracion" DockPanel.Dock="Bottom" Style="{StaticResource BotonActividad}"
-                                  Tag="Configuracion" Click="Actividad_Click" Content="&#xE713;" ToolTip="Configuración (Ctrl+,)" />
+                                  Command="{x:Static local:Comandos.VerConfiguracion}" Content="&#xE713;" ToolTip="Configuración (Ctrl+,)" />
                     <StackPanel>
                         <ToggleButton x:Name="ActividadExplorador" Style="{StaticResource BotonActividad}" Tag="Explorador"
                                       Click="Actividad_Click" Content="&#xE8B7;" ToolTip="Espacios de trabajo (Ctrl+Mayús+E)" />
@@ -400,108 +401,6 @@
                         </ListBox>
                         <TextBlock x:Name="EsquemaVacio" Text="El documento no tiene títulos." Margin="20,4,16,0"
                                    TextWrapping="Wrap" Foreground="{DynamicResource Chrome.Tenue}" />
-                        <!-- Configuración: cada opción con su nombre y una explicación corta. Los sí/no son interruptores
-                             (Interruptor_Click, por x:Name); las listas, opciones agrupadas (Opcion_Checked, por GroupName y Tag). -->
-                        <ScrollViewer x:Name="PanelConfiguracion" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                        <StackPanel Margin="20,0,16,24">
-                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="General" />
-                            <TextBlock Text="Tema" FontSize="13" />
-                            <StackPanel Margin="-6,4,0,14">
-                                <RadioButton GroupName="Tema" Tag="Sistema" Content="Igual que Windows" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="Tema" Tag="Claro" Content="Claro" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="Tema" Tag="Oscuro" Content="Oscuro" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                            </StackPanel>
-                            <TextBlock Text="Modo al abrir" FontSize="13" />
-                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Cómo se ven los documentos al iniciar MD Codex." />
-                            <StackPanel Margin="-6,4,0,14">
-                                <RadioButton GroupName="ModoInicial" Tag="Ultimo" Content="El de la última vez" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="ModoInicial" Tag="Vista" Content="Vista" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="ModoInicial" Tag="Dividido" Content="Editor y vista" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="ModoInicial" Tag="Editor" Content="Editor" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="ModoInicial" Tag="Pro" Content="Por bloques" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                            </StackPanel>
-                            <DockPanel Margin="0,0,0,14">
-                                <CheckBox x:Name="OpcionReabrirSesion" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
-                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Reabrir la sesión anterior" />
-                                <StackPanel>
-                                    <TextBlock Text="Reabrir la sesión anterior" FontSize="13" />
-                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Al iniciar sin un archivo, vuelve a abrir las pestañas de la última vez." />
-                                </StackPanel>
-                            </DockPanel>
-                            <TextBlock Text="Si un archivo cambia fuera de la app" FontSize="13" />
-                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Si tiene cambios sin guardar, siempre pregunta antes de recargarlo." />
-                            <StackPanel Margin="-6,4,0,14">
-                                <RadioButton GroupName="CambioExterno" Tag="Recargar" Content="Recargarlo" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="CambioExterno" Tag="Preguntar" Content="Preguntar siempre" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                            </StackPanel>
-                            <DockPanel Margin="0,0,0,20">
-                                <CheckBox x:Name="OpcionBuscarActualizaciones" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
-                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Buscar actualizaciones al iniciar" />
-                                <StackPanel>
-                                    <TextBlock Text="Buscar actualizaciones al iniciar" FontSize="13" />
-                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Avisa cuando hay una versión nueva en GitHub." />
-                                </StackPanel>
-                            </DockPanel>
-
-                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Editor de texto" />
-                            <DockPanel Margin="0,0,0,14">
-                                <CheckBox x:Name="OpcionAjustarLineas" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
-                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Ajustar las líneas largas" />
-                                <StackPanel>
-                                    <TextBlock Text="Ajustar las líneas largas" FontSize="13" />
-                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
-                                               Text="Las líneas que no caben siguen abajo. Desactivado, siguen hacia la derecha y el editor se desplaza en horizontal." />
-                                </StackPanel>
-                            </DockPanel>
-                            <DockPanel Margin="0,0,0,14">
-                                <CheckBox x:Name="OpcionNumerosLinea" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
-                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Mostrar los números de línea" />
-                                <TextBlock Text="Mostrar los números de línea" FontSize="13" />
-                            </DockPanel>
-                            <DockPanel Margin="0,0,0,14">
-                                <CheckBox x:Name="OpcionResaltarLinea" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
-                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Resaltar la línea actual" />
-                                <TextBlock Text="Resaltar la línea actual" FontSize="13" />
-                            </DockPanel>
-                            <TextBlock Text="Guardado automático" FontSize="13" />
-                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Solo para documentos que ya tienen archivo." />
-                            <StackPanel Margin="-6,4,0,20">
-                                <RadioButton GroupName="GuardadoAutomatico" Tag="Desactivado" Content="Desactivado" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="GuardadoAutomatico" Tag="AlCambiar" Content="Al cambiar de pestaña o de ventana" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="GuardadoAutomatico" Tag="AlDejarDeEscribir" Content="Al dejar de escribir" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                            </StackPanel>
-
-                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Vista previa" />
-                            <TextBlock Text="Ancho del texto" FontSize="13" />
-                            <StackPanel Margin="-6,4,0,14">
-                                <RadioButton GroupName="AnchoVista" Tag="Compacto" Content="Compacto, centrado" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="AnchoVista" Tag="Completo" Content="Todo el ancho" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                            </StackPanel>
-                            <DockPanel Margin="0,0,0,20">
-                                <CheckBox x:Name="OpcionSincronizarDesplazamiento" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
-                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Sincronizar el desplazamiento" />
-                                <StackPanel>
-                                    <TextBlock Text="Sincronizar el desplazamiento" FontSize="13" />
-                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="En Editor y vista, al desplazar uno el otro lo sigue." />
-                                </StackPanel>
-                            </DockPanel>
-
-                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Editor por bloques" />
-                            <TextBlock Text="Ancho del texto" FontSize="13" />
-                            <StackPanel Margin="-6,4,0,20">
-                                <RadioButton GroupName="AnchoBloques" Tag="Compacto" Content="Compacto, centrado" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                                <RadioButton GroupName="AnchoBloques" Tag="Completo" Content="Todo el ancho" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
-                            </StackPanel>
-
-                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Imágenes" />
-                            <TextBlock Text="Carpeta de las imágenes pegadas" FontSize="13" />
-                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
-                                       Text="Junto a cada documento, al pegar o arrastrar imágenes en el editor por bloques. Enter para aplicar." />
-                            <TextBox x:Name="CajaCarpetaImagenes" FontSize="13" Height="26" Padding="6,0" Margin="0,6,0,0"
-                                     VerticalContentAlignment="Center" KeyDown="CajaCarpetaImagenes_KeyDown"
-                                     LostKeyboardFocus="CajaCarpetaImagenes_LostKeyboardFocus" />
-                        </StackPanel>
-                        </ScrollViewer>
                     </Grid>
                 </DockPanel>
                 </Border>
@@ -612,6 +511,180 @@
                     </StackPanel>
                 </DockPanel>
             </Border>
+
+            <!-- ===== Configuración: ventana modal sobre el área de trabajo y la barra de estado =====
+                 Fondo oscurecido (un clic ahí la cierra, igual que Esc o la ✕), categorías a la izquierda y
+                 sus opciones a la derecha. Los sí/no son interruptores (Interruptor_Click, por x:Name);
+                 las listas, selects (Selector_SelectionChanged, por x:Name y el Tag de cada opción). -->
+            <Grid x:Name="CapaConfiguracion" Grid.Row="1" Grid.RowSpan="2" Panel.ZIndex="10" Visibility="Collapsed"
+                  KeyDown="CapaConfiguracion_KeyDown">
+                <Border Background="#99000000" MouseLeftButtonDown="FondoConfiguracion_MouseLeftButtonDown" />
+                <Border MaxWidth="820" MaxHeight="560" Margin="32" CornerRadius="10" BorderThickness="1"
+                        Background="{DynamicResource Editor.Fondo}" BorderBrush="{DynamicResource Chrome.Borde}">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.4" />
+                    </Border.Effect>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="210" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Categorías -->
+                        <Border CornerRadius="9,0,0,9" Background="{DynamicResource Lateral.Fondo}"
+                                BorderThickness="0,0,1,0" BorderBrush="{DynamicResource Chrome.Borde}">
+                            <StackPanel Margin="10,16,10,10">
+                                <TextBlock Style="{StaticResource EtiquetaTenue}" Text="CONFIGURACIÓN" Margin="10,0,0,12" />
+                                <!-- Tag: la sección que muestra; el texto (segundo hijo) es también el título de la derecha -->
+                                <RadioButton x:Name="CategoriaInicial" GroupName="Categoria" Tag="SeccionGeneral" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE713;" Style="{StaticResource IconoCategoria}" />
+                                        <TextBlock Text="General" />
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton GroupName="Categoria" Tag="SeccionEditor" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE70F;" Style="{StaticResource IconoCategoria}" />
+                                        <TextBlock Text="Editor de texto" />
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton GroupName="Categoria" Tag="SeccionVista" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE890;" Style="{StaticResource IconoCategoria}" />
+                                        <TextBlock Text="Vista previa" />
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton GroupName="Categoria" Tag="SeccionBloques" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8FD;" Style="{StaticResource IconoCategoria}" />
+                                        <TextBlock Text="Editor por bloques" />
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton GroupName="Categoria" Tag="SeccionImagenes" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xEB9F;" Style="{StaticResource IconoCategoria}" />
+                                        <TextBlock Text="Imágenes" />
+                                    </StackPanel>
+                                </RadioButton>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Opciones de la categoría elegida -->
+                        <DockPanel Grid.Column="1">
+                            <DockPanel DockPanel.Dock="Top" Margin="28,14,12,8">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource BotonIcono}" FontSize="11" Width="30" Height="30"
+                                        Content="&#xE8BB;" Click="CerrarConfiguracion_Click" ToolTip="Cerrar (Esc)" />
+                                <TextBlock x:Name="TituloCategoria" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <Grid Margin="28,8,28,28" MaxWidth="520" HorizontalAlignment="Left">
+                                    <StackPanel x:Name="SeccionGeneral">
+                                        <TextBlock Text="Tema" FontSize="13" />
+                                        <ComboBox x:Name="SelectorTema" Style="{StaticResource Selector}" Margin="0,6,0,20" SelectionChanged="Selector_SelectionChanged">
+                                            <ComboBoxItem Tag="Sistema" Content="Igual que Windows" />
+                                            <ComboBoxItem Tag="Claro" Content="Claro" />
+                                            <ComboBoxItem Tag="Oscuro" Content="Oscuro" />
+                                        </ComboBox>
+                                        <TextBlock Text="Modo al abrir" FontSize="13" />
+                                        <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Cómo se ven los documentos al iniciar MD Codex." />
+                                        <ComboBox x:Name="SelectorModoInicial" Style="{StaticResource Selector}" Margin="0,6,0,20" SelectionChanged="Selector_SelectionChanged">
+                                            <ComboBoxItem Tag="Ultimo" Content="El de la última vez" />
+                                            <ComboBoxItem Tag="Vista" Content="Vista" />
+                                            <ComboBoxItem Tag="Dividido" Content="Editor y vista" />
+                                            <ComboBoxItem Tag="Editor" Content="Editor" />
+                                            <ComboBoxItem Tag="Pro" Content="Por bloques" />
+                                        </ComboBox>
+                                        <DockPanel Margin="0,0,0,20">
+                                            <CheckBox x:Name="OpcionReabrirSesion" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                                      VerticalAlignment="Top" Margin="16,1,0,0" Click="Interruptor_Click" ToolTip="Reabrir la sesión anterior" />
+                                            <StackPanel>
+                                                <TextBlock Text="Reabrir la sesión anterior" FontSize="13" />
+                                                <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Al iniciar sin un archivo, vuelve a abrir las pestañas de la última vez." />
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <TextBlock Text="Si un archivo cambia fuera de la app" FontSize="13" />
+                                        <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Si tiene cambios sin guardar, siempre pregunta antes de recargarlo." />
+                                        <ComboBox x:Name="SelectorCambioExterno" Style="{StaticResource Selector}" Margin="0,6,0,20" SelectionChanged="Selector_SelectionChanged">
+                                            <ComboBoxItem Tag="Recargar" Content="Recargarlo" />
+                                            <ComboBoxItem Tag="Preguntar" Content="Preguntar siempre" />
+                                        </ComboBox>
+                                        <DockPanel>
+                                            <CheckBox x:Name="OpcionBuscarActualizaciones" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                                      VerticalAlignment="Top" Margin="16,1,0,0" Click="Interruptor_Click" ToolTip="Buscar actualizaciones al iniciar" />
+                                            <StackPanel>
+                                                <TextBlock Text="Buscar actualizaciones al iniciar" FontSize="13" />
+                                                <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Avisa cuando hay una versión nueva en GitHub." />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SeccionEditor" Visibility="Collapsed">
+                                        <DockPanel Margin="0,0,0,20">
+                                            <CheckBox x:Name="OpcionAjustarLineas" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                                      VerticalAlignment="Top" Margin="16,1,0,0" Click="Interruptor_Click" ToolTip="Ajustar las líneas largas" />
+                                            <StackPanel>
+                                                <TextBlock Text="Ajustar las líneas largas" FontSize="13" />
+                                                <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
+                                                           Text="Las líneas que no caben siguen abajo. Desactivado, siguen hacia la derecha y el editor se desplaza en horizontal." />
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <DockPanel Margin="0,0,0,20">
+                                            <CheckBox x:Name="OpcionNumerosLinea" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                                      VerticalAlignment="Top" Margin="16,1,0,0" Click="Interruptor_Click" ToolTip="Mostrar los números de línea" />
+                                            <TextBlock Text="Mostrar los números de línea" FontSize="13" />
+                                        </DockPanel>
+                                        <DockPanel Margin="0,0,0,20">
+                                            <CheckBox x:Name="OpcionResaltarLinea" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                                      VerticalAlignment="Top" Margin="16,1,0,0" Click="Interruptor_Click" ToolTip="Resaltar la línea actual" />
+                                            <TextBlock Text="Resaltar la línea actual" FontSize="13" />
+                                        </DockPanel>
+                                        <TextBlock Text="Guardado automático" FontSize="13" />
+                                        <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Solo para documentos que ya tienen archivo." />
+                                        <ComboBox x:Name="SelectorGuardado" Style="{StaticResource Selector}" Margin="0,6,0,0" SelectionChanged="Selector_SelectionChanged">
+                                            <ComboBoxItem Tag="Desactivado" Content="Desactivado" />
+                                            <ComboBoxItem Tag="AlCambiar" Content="Al cambiar de pestaña o de ventana" />
+                                            <ComboBoxItem Tag="AlDejarDeEscribir" Content="Al dejar de escribir" />
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SeccionVista" Visibility="Collapsed">
+                                        <TextBlock Text="Ancho del texto" FontSize="13" />
+                                        <ComboBox x:Name="SelectorAnchoVista" Style="{StaticResource Selector}" Margin="0,6,0,20" SelectionChanged="Selector_SelectionChanged">
+                                            <ComboBoxItem Tag="Compacto" Content="Compacto, centrado" />
+                                            <ComboBoxItem Tag="Completo" Content="Todo el ancho" />
+                                        </ComboBox>
+                                        <DockPanel>
+                                            <CheckBox x:Name="OpcionSincronizarDesplazamiento" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                                      VerticalAlignment="Top" Margin="16,1,0,0" Click="Interruptor_Click" ToolTip="Sincronizar el desplazamiento" />
+                                            <StackPanel>
+                                                <TextBlock Text="Sincronizar el desplazamiento" FontSize="13" />
+                                                <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="En Editor y vista, al desplazar uno el otro lo sigue." />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SeccionBloques" Visibility="Collapsed">
+                                        <TextBlock Text="Ancho del texto" FontSize="13" />
+                                        <ComboBox x:Name="SelectorAnchoBloques" Style="{StaticResource Selector}" Margin="0,6,0,0" SelectionChanged="Selector_SelectionChanged">
+                                            <ComboBoxItem Tag="Compacto" Content="Compacto, centrado" />
+                                            <ComboBoxItem Tag="Completo" Content="Todo el ancho" />
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SeccionImagenes" Visibility="Collapsed">
+                                        <TextBlock Text="Carpeta de las imágenes pegadas" FontSize="13" />
+                                        <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
+                                                   Text="Junto a cada documento, al pegar o arrastrar imágenes en el editor por bloques. Se aplica con Enter o al salir de la caja." />
+                                        <TextBox x:Name="CajaCarpetaImagenes" FontSize="13" Height="30" Padding="6,0" Margin="0,6,0,0" Width="280"
+                                                 HorizontalAlignment="Left" VerticalContentAlignment="Center" KeyDown="CajaCarpetaImagenes_KeyDown"
+                                                 LostKeyboardFocus="CajaCarpetaImagenes_LostKeyboardFocus" />
+                                    </StackPanel>
+                                </Grid>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Grid>
+                </Border>
+            </Grid>
 
             <!-- ===== Barra de estado ===== -->
             <Grid Grid.Row="2" Background="{DynamicResource Estado.Fondo}">

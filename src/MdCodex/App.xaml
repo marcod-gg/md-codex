@@ -276,23 +276,23 @@
             </Setter>
         </Style>
 
-        <!-- Opción de una lista en la configuración: fila con un ✓ en la elegida -->
-        <Style x:Key="OpcionLista" TargetType="RadioButton">
+        <!-- Categoría de la ventana de configuración: fila con ícono; la elegida, con fondo y la marca de acento -->
+        <Style x:Key="CategoriaConfiguracion" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Margin" Value="0,0,0,2" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Fondo" Background="Transparent" CornerRadius="4" Padding="6,4">
-                            <DockPanel>
-                                <TextBlock x:Name="Marca" DockPanel.Dock="Left" Width="18" Text="&#xE73E;" FontSize="12"
-                                           FontFamily="{StaticResource Iconos}" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource Acento}" Visibility="Hidden" />
+                        <Grid>
+                            <Border x:Name="Fondo" Background="Transparent" CornerRadius="6" Padding="10,7">
                                 <ContentPresenter VerticalAlignment="Center" />
-                            </DockPanel>
-                        </Border>
+                            </Border>
+                            <Border x:Name="Marca" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left"
+                                    Background="{DynamicResource Acento}" Visibility="Collapsed" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
@@ -301,6 +301,44 @@
                                 <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Activo}" />
+                                <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="IconoCategoria" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Iconos}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Tenue}" />
+        </Style>
+
+        <!-- Opción de un select: fila con un ✓ en la elegida -->
+        <Style x:Key="OpcionSelector" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Fondo" Background="Transparent" CornerRadius="4" Padding="8,6,16,6">
+                            <DockPanel>
+                                <TextBlock x:Name="Marca" DockPanel.Dock="Left" Width="20" Text="&#xE73E;" FontSize="12"
+                                           FontFamily="{StaticResource Iconos}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Acento}" Visibility="Hidden" />
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -309,12 +347,63 @@
             </Setter>
         </Style>
 
-        <!-- Encabezado de sección y nombre de opción en la configuración -->
-        <Style x:Key="SeccionConfiguracion" TargetType="TextBlock">
+        <!-- Select de la configuración: caja con la opción elegida y una flecha; la lista se despliega debajo -->
+        <Style x:Key="Selector" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,6,0,10" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="260" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource OpcionSelector}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="Caja" Focusable="False" ClickMode="Press" Style="{x:Null}"
+                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Borde" CornerRadius="6" BorderThickness="1"
+                                                BorderBrush="{DynamicResource Chrome.Borde}" Background="{DynamicResource Lateral.Fondo}">
+                                            <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Iconos}" FontSize="10" Margin="0,0,12,0"
+                                                       HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource Chrome.Tenue}" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Borde" Property="BorderBrush" Value="{DynamicResource Chrome.Tenue}" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Borde" Property="BorderBrush" Value="{DynamicResource Acento}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter IsHitTestVisible="False" Margin="12,0,32,0" VerticalAlignment="Center"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                                <Border Margin="0,4,10,10" Padding="4" CornerRadius="6" BorderThickness="1"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        Background="{DynamicResource Lateral.Fondo}" BorderBrush="{DynamicResource Chrome.Borde}">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.3" />
+                                    </Border.Effect>
+                                    <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
+
         <Style x:Key="ExplicacionConfiguracion" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Margin" Value="0,3,0,0" />

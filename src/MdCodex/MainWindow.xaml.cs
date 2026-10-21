@@ -27,7 +27,7 @@ public partial class MainWindow : Window
     // ".mdcodex" para no chocar con el filtro que sirve los archivos de los documentos.
     private const string HostPro = "mdcodex.editor";
 
-    private enum Panel { Explorador, Esquema, Configuracion }
+    private enum Panel { Explorador, Esquema }
 
     private readonly ObservableCollection<Pestana> _pestanas = [];
     // Documento vacío que muestra el editor cuando no hay pestañas abiertas.
@@ -1371,21 +1371,13 @@ public partial class MainWindow : Window
             : "Barra lateral automática. Clic para dejarla siempre abierta (Ctrl+Mayús+B)";
         ActividadExplorador.IsChecked = visible && _panel == Panel.Explorador;
         ActividadEsquema.IsChecked = visible && _panel == Panel.Esquema;
-        ActividadConfiguracion.IsChecked = visible && _panel == Panel.Configuracion;
 
         var explorador = _panel == Panel.Explorador;
-        var esquema = _panel == Panel.Esquema;
-        TituloLateral.Text = _panel switch
-        {
-            Panel.Explorador => "ESPACIOS DE TRABAJO",
-            Panel.Esquema => "ESQUEMA",
-            _ => "CONFIGURACIÓN",
-        };
+        TituloLateral.Text = explorador ? "ESPACIOS DE TRABAJO" : "ESQUEMA";
         AccionesExplorador.Visibility = Visible(explorador);
         PanelExplorador.Visibility = Visible(explorador);
-        ListaEsquema.Visibility = Visible(esquema && _titulos.Count > 0);
-        EsquemaVacio.Visibility = Visible(esquema && _titulos.Count == 0);
-        PanelConfiguracion.Visibility = Visible(_panel == Panel.Configuracion);
+        ListaEsquema.Visibility = Visible(!explorador && _titulos.Count > 0);
+        EsquemaVacio.Visibility = Visible(!explorador && _titulos.Count == 0);
         EsquemaVacio.Text = _activa is null ? "No hay ningún documento abierto." : "El documento no tiene títulos.";
     }
 
@@ -2238,25 +2230,67 @@ public partial class MainWindow : Window
 
     private void VerEsquema_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Esquema);
 
-    private void VerConfiguracion_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Configuracion);
+    // Ctrl+, o el engranaje: abre la ventana de configuración, o la cierra si ya está abierta.
+    private void VerConfiguracion_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (CapaConfiguracion.IsVisible)
+            CerrarConfiguracion();
+        else
+            AbrirConfiguracion();
+    }
 
     // ---------- Configuración ----------
 
-    // Marca los controles del panel con lo guardado.
+    private void AbrirConfiguracion()
+    {
+        MostrarConfiguracion();
+        CategoriaInicial.IsChecked = true;
+        CapaConfiguracion.Visibility = Visibility.Visible;
+        ActividadConfiguracion.IsChecked = true;
+        Dispatcher.BeginInvoke(() => CategoriaInicial.Focus(), DispatcherPriority.Input);
+    }
+
+    private void CerrarConfiguracion()
+    {
+        // Al ocultarse, la caja de la carpeta no pierde el foco por sí sola: lo escrito se aplica aquí.
+        AplicarCarpetaImagenes();
+        CapaConfiguracion.Visibility = Visibility.Collapsed;
+        ActividadConfiguracion.IsChecked = false;
+        if (_activa is not null && _modo is Modo.Dividido or Modo.Editor)
+            Editor.TextArea.Focus();
+    }
+
+    private void CerrarConfiguracion_Click(object sender, RoutedEventArgs e) => CerrarConfiguracion();
+
+    private void FondoConfiguracion_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => CerrarConfiguracion();
+
+    // Esc cierra (si un select está desplegado, Esc primero lo pliega y no llega hasta aquí).
+    private void CapaConfiguracion_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+            return;
+        e.Handled = true;
+        CerrarConfiguracion();
+    }
+
+    private void Categoria_Checked(object sender, RoutedEventArgs e)
+    {
+        var categoria = (RadioButton)sender;
+        foreach (var seccion in new[] { SeccionGeneral, SeccionEditor, SeccionVista, SeccionBloques, SeccionImagenes })
+            seccion.Visibility = Visible(seccion.Name == (string)categoria.Tag);
+        TituloCategoria.Text = ((TextBlock)((StackPanel)categoria.Content).Children[1]).Text;
+    }
+
+    // Marca los controles de la ventana con lo guardado.
     private void MostrarConfiguracion()
     {
         _mostrandoConfiguracion = true;
-        var elegidas = new Dictionary<string, string>
-        {
-            ["Tema"] = Config.Tema.ToString(),
-            ["ModoInicial"] = Config.ModoInicial.ToString(),
-            ["CambioExterno"] = Config.CambioExterno.ToString(),
-            ["GuardadoAutomatico"] = Config.GuardadoAutomatico.ToString(),
-            ["AnchoVista"] = Config.AnchoVista.ToString(),
-            ["AnchoBloques"] = Config.AnchoBloques.ToString(),
-        };
-        foreach (var opcion in Descendientes<RadioButton>(PanelConfiguracion))
-            opcion.IsChecked = elegidas[opcion.GroupName] == (string)opcion.Tag;
+        Seleccionar(SelectorTema, Config.Tema);
+        Seleccionar(SelectorModoInicial, Config.ModoInicial);
+        Seleccionar(SelectorCambioExterno, Config.CambioExterno);
+        Seleccionar(SelectorGuardado, Config.GuardadoAutomatico);
+        Seleccionar(SelectorAnchoVista, Config.AnchoVista);
+        Seleccionar(SelectorAnchoBloques, Config.AnchoBloques);
         OpcionReabrirSesion.IsChecked = Config.ReabrirSesion;
         OpcionBuscarActualizaciones.IsChecked = Config.BuscarActualizaciones;
         OpcionAjustarLineas.IsChecked = Config.AjustarLineas;
@@ -2286,33 +2320,36 @@ public partial class MainWindow : Window
         AplicarEditor();
     }
 
-    private void Opcion_Checked(object sender, RoutedEventArgs e)
+    // Cada opción de un select lleva en Tag el nombre del valor (el del enum de Configuracion).
+    private static void Seleccionar<T>(ComboBox selector, T valor) where T : struct, Enum =>
+        selector.SelectedItem = selector.Items.OfType<ComboBoxItem>().First(o => (string)o.Tag == valor.ToString());
+
+    private void Selector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_mostrandoConfiguracion)
+        var selector = (ComboBox)sender;
+        if (_mostrandoConfiguracion || selector.SelectedItem is not ComboBoxItem { Tag: string valor })
             return;
-        var opcion = (RadioButton)sender;
-        var valor = (string)opcion.Tag;
-        switch (opcion.GroupName)
+        switch (selector.Name)
         {
-            case "Tema":
+            case nameof(SelectorTema):
                 Config.Tema = Tema.Preferido = Enum.Parse<TemaPreferido>(valor);
                 AplicarTema();
                 break;
-            case "ModoInicial":
+            case nameof(SelectorModoInicial):
                 Config.ModoInicial = Enum.Parse<ModoInicial>(valor);
                 break;
-            case "CambioExterno":
+            case nameof(SelectorCambioExterno):
                 Config.CambioExterno = Enum.Parse<CambioExterno>(valor);
                 break;
-            case "GuardadoAutomatico":
+            case nameof(SelectorGuardado):
                 Config.GuardadoAutomatico = Enum.Parse<GuardadoAutomatico>(valor);
                 _guardadoDiferido.Stop();
                 break;
-            case "AnchoVista":
+            case nameof(SelectorAnchoVista):
                 Config.AnchoVista = Enum.Parse<Ancho>(valor);
                 EnviarAncho();
                 break;
-            case "AnchoBloques":
+            case nameof(SelectorAnchoBloques):
                 Config.AnchoBloques = Enum.Parse<Ancho>(valor);
                 EnviarAnchoPro();
                 break;
@@ -2406,17 +2443,6 @@ public partial class MainWindow : Window
     private void Alejar_Executed(object sender, ExecutedRoutedEventArgs e) => CambiarZoom(-1);
 
     private void ZoomNormal_Executed(object sender, ExecutedRoutedEventArgs e) => FijarZoom(1);
-
-    private static IEnumerable<T> Descendientes<T>(DependencyObject raiz) where T : DependencyObject
-    {
-        foreach (var hijo in LogicalTreeHelper.GetChildren(raiz).OfType<DependencyObject>())
-        {
-            if (hijo is T encontrado)
-                yield return encontrado;
-            foreach (var nieto in Descendientes<T>(hijo))
-                yield return nieto;
-        }
-    }
 
     private void AlternarLateral_Executed(object sender, ExecutedRoutedEventArgs e)
     {
