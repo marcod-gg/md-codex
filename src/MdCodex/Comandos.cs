@@ -14,6 +14,9 @@ public static class Comandos
     public static readonly RoutedUICommand VerExplorador = new("Espacios de trabajo", nameof(VerExplorador), typeof(Comandos));
     public static readonly RoutedUICommand VerEsquema = new("Esquema", nameof(VerEsquema), typeof(Comandos));
     public static readonly RoutedUICommand VerConfiguracion = new("Configuración", nameof(VerConfiguracion), typeof(Comandos));
+    public static readonly RoutedUICommand Acercar = new("Acercar", nameof(Acercar), typeof(Comandos));
+    public static readonly RoutedUICommand Alejar = new("Alejar", nameof(Alejar), typeof(Comandos));
+    public static readonly RoutedUICommand ZoomNormal = new("Zoom normal", nameof(ZoomNormal), typeof(Comandos));
     public static readonly RoutedUICommand AlternarLateral = new("Barra lateral", nameof(AlternarLateral), typeof(Comandos));
     public static readonly RoutedUICommand GuardarTodo = new("Guardar todo", nameof(GuardarTodo), typeof(Comandos));
     public static readonly RoutedUICommand CerrarPestana = new("Cerrar pestaña", nameof(CerrarPestana), typeof(Comandos));

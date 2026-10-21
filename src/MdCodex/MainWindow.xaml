@@ -31,6 +31,9 @@
         <CommandBinding Command="{x:Static local:Comandos.VerExplorador}" Executed="VerExplorador_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.VerEsquema}" Executed="VerEsquema_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.VerConfiguracion}" Executed="VerConfiguracion_Executed" />
+        <CommandBinding Command="{x:Static local:Comandos.Acercar}" Executed="Acercar_Executed" />
+        <CommandBinding Command="{x:Static local:Comandos.Alejar}" Executed="Alejar_Executed" />
+        <CommandBinding Command="{x:Static local:Comandos.ZoomNormal}" Executed="ZoomNormal_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.AlternarLateral}" Executed="AlternarLateral_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.Negrita}" Executed="Negrita_Executed" CanExecute="EditorVisible_CanExecute" />
         <CommandBinding Command="{x:Static local:Comandos.Cursiva}" Executed="Cursiva_Executed" CanExecute="EditorVisible_CanExecute" />
@@ -52,6 +55,12 @@
         <KeyBinding Key="E" Modifiers="Control+Shift" Command="{x:Static local:Comandos.VerExplorador}" />
         <KeyBinding Key="O" Modifiers="Control+Shift" Command="{x:Static local:Comandos.VerEsquema}" />
         <KeyBinding Key="OemComma" Modifiers="Control" Command="{x:Static local:Comandos.VerConfiguracion}" />
+        <KeyBinding Key="OemPlus" Modifiers="Control" Command="{x:Static local:Comandos.Acercar}" />
+        <KeyBinding Key="Add" Modifiers="Control" Command="{x:Static local:Comandos.Acercar}" />
+        <KeyBinding Key="OemMinus" Modifiers="Control" Command="{x:Static local:Comandos.Alejar}" />
+        <KeyBinding Key="Subtract" Modifiers="Control" Command="{x:Static local:Comandos.Alejar}" />
+        <KeyBinding Key="D0" Modifiers="Control" Command="{x:Static local:Comandos.ZoomNormal}" />
+        <KeyBinding Key="NumPad0" Modifiers="Control" Command="{x:Static local:Comandos.ZoomNormal}" />
         <KeyBinding Key="B" Modifiers="Control+Shift" Command="{x:Static local:Comandos.AlternarLateral}" />
         <KeyBinding Key="B" Modifiers="Control" Command="{x:Static local:Comandos.Negrita}" />
         <KeyBinding Key="I" Modifiers="Control" Command="{x:Static local:Comandos.Cursiva}" />
@@ -363,6 +372,9 @@
                                             <DataTrigger Binding="{Binding EsEspacio}" Value="True">
                                                 <Setter TargetName="Nombre" Property="FontWeight" Value="Bold" />
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding EsSeccion}" Value="True">
+                                                <Setter TargetName="Nombre" Property="FontWeight" Value="Bold" />
+                                            </DataTrigger>
                                             <DataTrigger Binding="{Binding EsActual}" Value="True">
                                                 <Setter TargetName="Nombre" Property="Foreground" Value="{DynamicResource Acento}" />
                                                 <Setter TargetName="Nombre" Property="FontWeight" Value="SemiBold" />
@@ -388,20 +400,108 @@
                         </ListBox>
                         <TextBlock x:Name="EsquemaVacio" Text="El documento no tiene títulos." Margin="20,4,16,0"
                                    TextWrapping="Wrap" Foreground="{DynamicResource Chrome.Tenue}" />
-                        <!-- Configuración: cada opción con su nombre, una explicación corta y un interruptor -->
-                        <StackPanel x:Name="PanelConfiguracion" Margin="20,4,16,0" Visibility="Collapsed">
-                            <TextBlock Text="Editor de texto" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10" />
-                            <DockPanel>
+                        <!-- Configuración: cada opción con su nombre y una explicación corta. Los sí/no son interruptores
+                             (Interruptor_Click, por x:Name); las listas, opciones agrupadas (Opcion_Checked, por GroupName y Tag). -->
+                        <ScrollViewer x:Name="PanelConfiguracion" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <StackPanel Margin="20,0,16,24">
+                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="General" />
+                            <TextBlock Text="Tema" FontSize="13" />
+                            <StackPanel Margin="-6,4,0,14">
+                                <RadioButton GroupName="Tema" Tag="Sistema" Content="Igual que Windows" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="Tema" Tag="Claro" Content="Claro" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="Tema" Tag="Oscuro" Content="Oscuro" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                            </StackPanel>
+                            <TextBlock Text="Modo al abrir" FontSize="13" />
+                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Cómo se ven los documentos al iniciar MD Codex." />
+                            <StackPanel Margin="-6,4,0,14">
+                                <RadioButton GroupName="ModoInicial" Tag="Ultimo" Content="El de la última vez" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="ModoInicial" Tag="Vista" Content="Vista" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="ModoInicial" Tag="Dividido" Content="Editor y vista" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="ModoInicial" Tag="Editor" Content="Editor" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="ModoInicial" Tag="Pro" Content="Por bloques" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                            </StackPanel>
+                            <DockPanel Margin="0,0,0,14">
+                                <CheckBox x:Name="OpcionReabrirSesion" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Reabrir la sesión anterior" />
+                                <StackPanel>
+                                    <TextBlock Text="Reabrir la sesión anterior" FontSize="13" />
+                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Al iniciar sin un archivo, vuelve a abrir las pestañas de la última vez." />
+                                </StackPanel>
+                            </DockPanel>
+                            <TextBlock Text="Si un archivo cambia fuera de la app" FontSize="13" />
+                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Si tiene cambios sin guardar, siempre pregunta antes de recargarlo." />
+                            <StackPanel Margin="-6,4,0,14">
+                                <RadioButton GroupName="CambioExterno" Tag="Recargar" Content="Recargarlo" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="CambioExterno" Tag="Preguntar" Content="Preguntar siempre" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                            </StackPanel>
+                            <DockPanel Margin="0,0,0,20">
+                                <CheckBox x:Name="OpcionBuscarActualizaciones" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Buscar actualizaciones al iniciar" />
+                                <StackPanel>
+                                    <TextBlock Text="Buscar actualizaciones al iniciar" FontSize="13" />
+                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Avisa cuando hay una versión nueva en GitHub." />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Editor de texto" />
+                            <DockPanel Margin="0,0,0,14">
                                 <CheckBox x:Name="OpcionAjustarLineas" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
-                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="OpcionAjustarLineas_Click"
-                                          ToolTip="Ajustar las líneas largas" />
+                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Ajustar las líneas largas" />
                                 <StackPanel>
                                     <TextBlock Text="Ajustar las líneas largas" FontSize="13" />
-                                    <TextBlock FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Chrome.Tenue}"
+                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
                                                Text="Las líneas que no caben siguen abajo. Desactivado, siguen hacia la derecha y el editor se desplaza en horizontal." />
                                 </StackPanel>
                             </DockPanel>
+                            <DockPanel Margin="0,0,0,14">
+                                <CheckBox x:Name="OpcionNumerosLinea" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Mostrar los números de línea" />
+                                <TextBlock Text="Mostrar los números de línea" FontSize="13" />
+                            </DockPanel>
+                            <DockPanel Margin="0,0,0,14">
+                                <CheckBox x:Name="OpcionResaltarLinea" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Resaltar la línea actual" />
+                                <TextBlock Text="Resaltar la línea actual" FontSize="13" />
+                            </DockPanel>
+                            <TextBlock Text="Guardado automático" FontSize="13" />
+                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Solo para documentos que ya tienen archivo." />
+                            <StackPanel Margin="-6,4,0,20">
+                                <RadioButton GroupName="GuardadoAutomatico" Tag="Desactivado" Content="Desactivado" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="GuardadoAutomatico" Tag="AlCambiar" Content="Al cambiar de pestaña o de ventana" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="GuardadoAutomatico" Tag="AlDejarDeEscribir" Content="Al dejar de escribir" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                            </StackPanel>
+
+                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Vista previa" />
+                            <TextBlock Text="Ancho del texto" FontSize="13" />
+                            <StackPanel Margin="-6,4,0,14">
+                                <RadioButton GroupName="AnchoVista" Tag="Compacto" Content="Compacto, centrado" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="AnchoVista" Tag="Completo" Content="Todo el ancho" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                            </StackPanel>
+                            <DockPanel Margin="0,0,0,20">
+                                <CheckBox x:Name="OpcionSincronizarDesplazamiento" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                          VerticalAlignment="Top" Margin="12,1,0,0" Click="Interruptor_Click" ToolTip="Sincronizar el desplazamiento" />
+                                <StackPanel>
+                                    <TextBlock Text="Sincronizar el desplazamiento" FontSize="13" />
+                                    <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="En Editor y vista, al desplazar uno el otro lo sigue." />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Editor por bloques" />
+                            <TextBlock Text="Ancho del texto" FontSize="13" />
+                            <StackPanel Margin="-6,4,0,20">
+                                <RadioButton GroupName="AnchoBloques" Tag="Compacto" Content="Compacto, centrado" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                                <RadioButton GroupName="AnchoBloques" Tag="Completo" Content="Todo el ancho" Style="{StaticResource OpcionLista}" Checked="Opcion_Checked" />
+                            </StackPanel>
+
+                            <TextBlock Style="{StaticResource SeccionConfiguracion}" Text="Imágenes" />
+                            <TextBlock Text="Carpeta de las imágenes pegadas" FontSize="13" />
+                            <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
+                                       Text="Junto a cada documento, al pegar o arrastrar imágenes en el editor por bloques. Enter para aplicar." />
+                            <TextBox x:Name="CajaCarpetaImagenes" FontSize="13" Height="26" Padding="6,0" Margin="0,6,0,0"
+                                     VerticalContentAlignment="Center" KeyDown="CajaCarpetaImagenes_KeyDown"
+                                     LostKeyboardFocus="CajaCarpetaImagenes_LostKeyboardFocus" />
                         </StackPanel>
+                        </ScrollViewer>
                     </Grid>
                 </DockPanel>
                 </Border>
@@ -532,6 +632,13 @@
                             <TextBlock x:Name="TextoEstadoActualizacion" Text="Actualización pendiente" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
+                    <!-- Zoom de lo que se está viendo: alejar, porcentaje (clic: volver al 100 %) y acercar -->
+                    <Button Style="{StaticResource ItemEstado}" Command="{x:Static local:Comandos.Alejar}" ToolTip="Alejar (Ctrl+-)"
+                            Content="&#xE738;" FontFamily="{StaticResource Iconos}" FontSize="10" />
+                    <Button x:Name="EstadoZoom" Style="{StaticResource ItemEstado}" Command="{x:Static local:Comandos.ZoomNormal}"
+                            ToolTip="Zoom. Clic para volver al 100 % (Ctrl+0)" Content="100 %" />
+                    <Button Style="{StaticResource ItemEstado}" Command="{x:Static local:Comandos.Acercar}" ToolTip="Acercar (Ctrl++)"
+                            Content="&#xE710;" FontFamily="{StaticResource Iconos}" FontSize="10" Margin="0,0,8,0" />
                     <Button x:Name="EstadoPosicion" Style="{StaticResource ItemEstado}" />
                     <Button x:Name="EstadoPalabras" Style="{StaticResource ItemEstado}" />
                     <Button x:Name="EstadoCodificacion" Style="{StaticResource ItemEstado}" ToolTip="Codificación del archivo" />

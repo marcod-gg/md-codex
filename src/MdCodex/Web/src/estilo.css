@@ -71,6 +71,11 @@ html, body {
   margin: 0 auto;
 }
 
+/* Configuración "Todo el ancho". */
+body.completo #editor {
+  max-width: none;
+}
+
 /* Crepe dibuja tablas, separadores y citas con su color de contorno casi transparente, y numera las
    listas con ese mismo color: en oscuro apenas se ven. Se igualan a la vista previa de la app. */
 .milkdown .milkdown-table-block th,

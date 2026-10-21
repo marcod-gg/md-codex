@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MdCodex;
 
@@ -27,15 +28,17 @@ public sealed class Recientes
     private static readonly string Ruta = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MdCodex", "recientes.json");
 
-    private static readonly JsonSerializerOptions Opciones = new() { WriteIndented = true };
+    // Las opciones de la configuración se guardan por nombre ("Oscuro"), no por número.
+    private static readonly JsonSerializerOptions Opciones = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
     public List<string> Archivos { get; set; } = [];
     public List<string> Carpetas { get; set; } = [];
     public Sesion? UltimaSesion { get; set; }
     // Preferencia de la barra lateral: fija (siempre abierta) o automática (se despliega al tocar un ícono).
     public bool LateralFijo { get; set; } = true;
-    // Configuración del editor de texto: ajustar las líneas largas al ancho (si no, se desplazan en horizontal).
-    public bool AjustarLineas { get; set; } = true;
+    // La sección Documentos del panel, desplegada o plegada.
+    public bool DocumentosExpandido { get; set; } = true;
+    public Configuracion Configuracion { get; set; } = new();
     // En el orden en que se muestran (se reordenan arrastrándolos).
     public List<EspacioTrabajo> Espacios { get; set; } = [];
 

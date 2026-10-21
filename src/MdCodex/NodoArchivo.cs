@@ -37,8 +37,50 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     // Solo en los nodos de primer nivel.
     public EspacioTrabajo? Espacio { get; private init; }
     public bool EsEspacio => Espacio is not null;
-    // El espacio de trabajo al que pertenece el nodo (una misma carpeta puede estar en varios).
-    public EspacioTrabajo EspacioDe => Espacio ?? Padre!.EspacioDe;
+    // El espacio de trabajo al que pertenece el nodo (una misma carpeta puede estar en varios); null en Documentos.
+    public EspacioTrabajo? EspacioDe => Espacio ?? Padre?.EspacioDe;
+
+    // Sección "Documentos" (primer nivel) y sus grupos "Abiertos" y "Recientes": se pliegan como carpetas,
+    // pero no son lugares del disco.
+    public bool EsGrupo { get; private init; }
+    public bool EsSeccion => EsGrupo && Padre is null;
+    public bool EnDocumentos => EsGrupo || Padre?.EnDocumentos == true;
+    private string? _iconoGrupo;
+
+    public static NodoArchivo DeDocumentos(bool expandido) => Grupo("Documentos", "", null, expandido);
+
+    // Rehace los grupos: "Abiertos" (sin espacio de trabajo) solo si hay alguno; "Recientes" siempre que haya.
+    public void LlenarDocumentos(IEnumerable<string> abiertos, IEnumerable<string> recientes)
+    {
+        var expandidos = Hijos.Where(h => h.EsGrupo).ToDictionary(h => h.Nombre, h => h.Expandido);
+        Hijos.Clear();
+        void Agregar(string nombre, string icono, IEnumerable<string> rutas)
+        {
+            var lista = rutas.ToList();
+            if (lista.Count == 0)
+                return;
+            var grupo = Grupo(nombre, icono, this, expandidos.GetValueOrDefault(nombre, true));
+            foreach (var ruta in lista)
+                grupo.Hijos.Add(new NodoArchivo(ruta, esCarpeta: false, grupo));
+            Hijos.Add(grupo);
+        }
+        Agregar("Abiertos", "", abiertos);
+        Agregar("Recientes", "", recientes);
+    }
+
+    private static NodoArchivo Grupo(string nombre, string icono, NodoArchivo? padre, bool expandido)
+    {
+        var grupo = new NodoArchivo(nombre, esCarpeta: true, padre)
+        {
+            EsGrupo = true,
+            Nombre = nombre,
+            _iconoGrupo = icono,
+            _cargado = true,
+            _expandido = expandido,
+        };
+        grupo.Hijos.Clear(); // sin el marcador "…": su contenido ya viene armado
+        return grupo;
+    }
 
     public static NodoArchivo DeEspacio(EspacioTrabajo espacio)
     {
@@ -58,7 +100,7 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     public static string NombreDeCarpeta(string carpeta) => Path.GetFileName(carpeta) is { Length: > 0 } nombre ? nombre : carpeta;
 
     public ObservableCollection<NodoArchivo> Hijos { get; } = [];
-    public string Icono => Espacio is not null ? Espacio.Icono :EsCarpeta ? (Expandido ? "\uE838" : "\uE8B7") : "\uE8A5";
+    public string Icono => Espacio is not null ? Espacio.Icono : _iconoGrupo ?? (EsCarpeta ? (Expandido ? "\uE838" : "\uE8B7") : "\uE8A5");
 
     public bool Expandido
     {

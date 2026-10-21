@@ -276,6 +276,52 @@
             </Setter>
         </Style>
 
+        <!-- Opción de una lista en la configuración: fila con un ✓ en la elegida -->
+        <Style x:Key="OpcionLista" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Fondo" Background="Transparent" CornerRadius="4" Padding="6,4">
+                            <DockPanel>
+                                <TextBlock x:Name="Marca" DockPanel.Dock="Left" Width="18" Text="&#xE73E;" FontSize="12"
+                                           FontFamily="{StaticResource Iconos}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Acento}" Visibility="Hidden" />
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Marca" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Encabezado de sección y nombre de opción en la configuración -->
+        <Style x:Key="SeccionConfiguracion" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,6,0,10" />
+        </Style>
+        <Style x:Key="ExplicacionConfiguracion" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Tenue}" />
+        </Style>
+
         <Style x:Key="EtiquetaTenue" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Chrome.Tenue}" />
             <Setter Property="FontSize" Value="11" />

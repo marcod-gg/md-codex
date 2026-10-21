@@ -4,10 +4,14 @@ using System.Windows.Media.Imaging;
 
 namespace MdCodex;
 
-// Imágenes que se agregan a un documento desde el modo Pro: se guardan en "imagenes/" junto al
-// documento y el Markdown las enlaza con una ruta relativa, así el documento sigue siendo portable.
+// Imágenes que se agregan a un documento desde el modo Pro: se guardan en una carpeta junto al
+// documento ("imagenes/" salvo que se configure otra) y el Markdown las enlaza con una ruta relativa,
+// así el documento sigue siendo portable.
 public static class Imagenes
 {
+    // Carpeta relativa al documento, de la configuración (ya validada).
+    public static string Carpeta { get; set; } = Configuracion.CarpetaImagenesPorDefecto;
+
     public const long TamanoMaximo = 20 * 1024 * 1024;
 
     public const string Filtro = "Imágenes (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg";
@@ -17,7 +21,7 @@ public static class Imagenes
     public static bool EsImagen(string ruta) =>
         Extensiones.Contains(Path.GetExtension(ruta), StringComparer.OrdinalIgnoreCase);
 
-    // Copia la imagen a "imagenes/" (salvo que ya esté dentro de la carpeta del documento) y devuelve
+    // Copia la imagen a la carpeta de imágenes (salvo que ya esté dentro de la carpeta del documento) y devuelve
     // la ruta para el Markdown.
     public static string Incorporar(string carpetaDocumento, string origen)
     {
@@ -49,7 +53,7 @@ public static class Imagenes
 
     private static string CarpetaImagenes(string carpetaDocumento)
     {
-        var carpeta = Path.Combine(carpetaDocumento, "imagenes");
+        var carpeta = Path.Combine(carpetaDocumento, Configuracion.CarpetaValida(Carpeta).Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(carpeta);
         return carpeta;
     }

@@ -71,6 +71,12 @@ public partial class MainWindow : Window
     // Marcar un botón de modo vuelve a llamar a AplicarModo; esto corta la recursión.
     private bool _aplicandoModo;
     private readonly DispatcherTimer _demoraDocumento;
+    // Guardado automático "al dejar de escribir": se reinicia con cada cambio.
+    private readonly DispatcherTimer _guardadoDiferido;
+    // Mientras se marcan los controles del panel con la configuración guardada, sus eventos no la cambian.
+    private bool _mostrandoConfiguracion;
+
+    private Configuracion Config => _recientes.Configuracion;
 
     public MainWindow(IReadOnlyList<string> archivosIniciales)
     {
@@ -78,21 +84,49 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         BarraPestanas.ItemsSource = _pestanas;
+        _pestanas.CollectionChanged += (_, _) => ActualizarDocumentos();
         Editor.Document = _sinDocumento;
         _demoraDocumento = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
         _demoraDocumento.Tick += (_, _) => ActualizarDocumento();
 
-        Editor.TextChanged += (_, _) => Reiniciar(_demoraDocumento);
+        _guardadoDiferido = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+        _guardadoDiferido.Tick += (_, _) =>
+        {
+            _guardadoDiferido.Stop();
+            GuardarAutomatico(_activa);
+        };
+
+        Editor.TextChanged += (_, _) =>
+        {
+            Reiniciar(_demoraDocumento);
+            if (Config.GuardadoAutomatico == GuardadoAutomatico.AlDejarDeEscribir)
+                Reiniciar(_guardadoDiferido);
+        };
         Editor.TextArea.Caret.PositionChanged += (_, _) => ActualizarPosicion();
         Editor.TextArea.TextView.ScrollOffsetChanged += (_, _) => SincronizarScroll();
-        Editor.Options.HighlightCurrentLine = true;
         SearchPanel.Install(Editor);
-        // Aire a ambos lados de la línea que separa los números del texto.
-        foreach (var margen in Editor.TextArea.LeftMargins.OfType<LineNumberMargin>())
-            margen.Margin = new Thickness(0, 0, 8, 0);
+        // Aire a la izquierda del texto, después de la línea que lo separa de los números.
         Editor.TextArea.TextView.Margin = new Thickness(10, 0, 0, 0);
-        Editor.WordWrap = _recientes.AjustarLineas;
-        OpcionAjustarLineas.IsChecked = _recientes.AjustarLineas;
+        // Ctrl + rueda sobre el editor cambia el zoom (en la vista y en el editor por bloques lo hace WebView2).
+        Editor.PreviewMouseWheel += (_, e) =>
+        {
+            if (Keyboard.Modifiers != ModifierKeys.Control)
+                return;
+            e.Handled = true;
+            CambiarZoom(e.Delta > 0 ? 1 : -1);
+        };
+        Deactivated += (_, _) =>
+        {
+            if (Config.GuardadoAutomatico == GuardadoAutomatico.AlCambiar)
+                foreach (var p in _pestanas)
+                    GuardarAutomatico(p);
+        };
+
+        Tema.Preferido = Config.Tema;
+        Imagenes.Carpeta = Config.CarpetaImagenes;
+        MostrarConfiguracion();
+        AplicarEditor();
+        AplicarZoom();
 
         PreviewDragEnter += Ventana_PreviewDragOver;
         PreviewDragOver += Ventana_PreviewDragOver;
@@ -114,7 +148,7 @@ public partial class MainWindow : Window
         AplicarTema();
         SystemEvents.UserPreferenceChanged += AlCambiarPreferencias;
 
-        AplicarModo(Modo.Vista);
+        AplicarModo(ModoDeInicio());
         RefrescarArbol();
         AplicarLateral();
         Activar(null);
@@ -128,12 +162,12 @@ public partial class MainWindow : Window
                 foreach (var archivo in archivosIniciales)
                     AbrirArchivo(archivo);
             }
-            else
+            else if (Config.ReabrirSesion)
             {
                 RestaurarSesion();
             }
 
-            if (await Actualizacion.BuscarAsync() is { } nueva)
+            if (Config.BuscarActualizaciones && await Actualizacion.BuscarAsync() is { } nueva)
             {
                 _actualizacion = nueva;
                 TextoActualizacion.Text = $"MD Codex {nueva.Version} está disponible.";
@@ -161,14 +195,23 @@ public partial class MainWindow : Window
                 AbrirArchivo(archivo);
             if (_pestanas.FirstOrDefault(p => string.Equals(p.Ruta, sesion.Activo, StringComparison.OrdinalIgnoreCase)) is { } activa)
                 Activar(activa);
-            if (Enum.TryParse<Modo>(sesion.Modo, out var modo))
-                AplicarModo(modo);
+            // El modo ya se eligió al iniciar (ModoDeInicio).
         }
         finally
         {
             _restaurando = false;
         }
     }
+
+    // El de la configuración, o el de la última vez.
+    private Modo ModoDeInicio() => Config.ModoInicial switch
+    {
+        ModoInicial.Vista => Modo.Vista,
+        ModoInicial.Dividido => Modo.Dividido,
+        ModoInicial.Editor => Modo.Editor,
+        ModoInicial.Pro => Modo.Pro,
+        _ => Enum.TryParse<Modo>(_recientes.UltimaSesion?.Modo, out var modo) ? modo : Modo.Vista,
+    };
 
     private void GuardarSesion()
     {
@@ -187,6 +230,7 @@ public partial class MainWindow : Window
             return;
         _recientes.AgregarArchivo(ruta);
         _recientes.Guardar();
+        ActualizarDocumentos();
     }
 
     private void RegistrarCarpetaReciente(string ruta)
@@ -239,6 +283,7 @@ public partial class MainWindow : Window
         {
             _recientes.Limpiar();
             _recientes.Guardar();
+            ActualizarDocumentos();
         };
         MenuRecientes.Items.Add(limpiar);
     }
@@ -253,6 +298,11 @@ public partial class MainWindow : Window
         await Visor.EnsureCoreWebView2Async(entorno);
 
         var core = Visor.CoreWebView2;
+        // Claro u oscuro según la configuración (las dos páginas usan prefers-color-scheme).
+        core.Profile.PreferredColorScheme = EsquemaWeb();
+        // El zoom guardado, y desde ahora Ctrl + rueda en la vista cambia el de toda la app.
+        Visor.ZoomFactor = Config.Zoom;
+        Visor.ZoomFactorChanged += (_, _) => FijarZoom(Visor.ZoomFactor);
         core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
         // Sin atajos del navegador: F5, Ctrl+W, etc. llegan a la ventana y no recargan la plantilla.
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
@@ -268,6 +318,7 @@ public partial class MainWindow : Window
         {
             _vistaLista = true;
             _restaurarScrollVista = true;
+            EnviarAncho();
             ActualizarDocumento();
         };
         core.NewWindowRequested += (_, e) =>
@@ -326,7 +377,7 @@ public partial class MainWindow : Window
 
     private void SincronizarScroll()
     {
-        if (!_vistaLista || _modo != Modo.Dividido || _activa is null || _scrollDesdeVista)
+        if (!_vistaLista || _modo != Modo.Dividido || _activa is null || _scrollDesdeVista || !Config.SincronizarDesplazamiento)
             return;
 
         var vista = Editor.TextArea.TextView;
@@ -341,7 +392,7 @@ public partial class MainWindow : Window
     // Lleva el editor a la línea (desde 0, con fracción) que la vista tiene arriba.
     private void SeguirVista(double linea, bool final)
     {
-        if (_modo != Modo.Dividido || _activa is null)
+        if (_modo != Modo.Dividido || _activa is null || !Config.SincronizarDesplazamiento)
             return;
 
         var vista = Editor.TextArea.TextView;
@@ -473,6 +524,8 @@ public partial class MainWindow : Window
 
         await VisorPro.EnsureCoreWebView2Async(entorno);
         var core = VisorPro.CoreWebView2;
+        VisorPro.ZoomFactor = Config.Zoom;
+        VisorPro.ZoomFactorChanged += (_, _) => FijarZoom(VisorPro.ZoomFactor);
         core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
@@ -519,6 +572,7 @@ public partial class MainWindow : Window
             {
                 case "listo":
                     _proListo = true;
+                    EnviarAnchoPro();
                     if (_modo == Modo.Pro)
                         CargarEnPro();
                     break;
@@ -789,6 +843,8 @@ public partial class MainWindow : Window
         {
             if (_activa == pestana)
                 return;
+            if (Config.GuardadoAutomatico == GuardadoAutomatico.AlCambiar)
+                GuardarAutomatico(_activa);
             _activa.Cursor = Editor.CaretOffset;
             _activa.ScrollEditor = Editor.VerticalOffset;
             _activa.EsActiva = false;
@@ -861,6 +917,19 @@ public partial class MainWindow : Window
     // ---------- Archivos ----------
 
     private bool Guardar(Pestana p) => p.Ruta is null ? GuardarComo(p) : Escribir(p, p.Ruta);
+
+    // Guardado automático: en silencio y solo si el documento ya tiene archivo y cambió. En el modo por
+    // bloques, primero se trae lo último escrito ahí.
+    private void GuardarAutomatico(Pestana? p)
+    {
+        if (p?.Ruta is null || !_pestanas.Contains(p))
+            return;
+        TrasSincronizar(() =>
+        {
+            if (p.Modificado && p.Ruta is { } ruta && _pestanas.Contains(p))
+                Escribir(p, ruta);
+        });
+    }
 
     private bool GuardarComo(Pestana p)
     {
@@ -935,9 +1004,12 @@ public partial class MainWindow : Window
         if (texto == p.Documento.Text || texto == p.CambioRechazado)
             return;
 
-        if (p.Modificado && MessageBox.Show(this,
-                $"{p.Nombre} cambió fuera de MD Codex.\n¿Quieres recargarlo? Perderás los cambios que no guardaste.",
-                "MD Codex", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        // Se pregunta si hay cambios sin guardar, o siempre si así se configuró.
+        var pregunta = p.Modificado
+            ? $"{p.Nombre} cambió fuera de MD Codex.\n¿Quieres recargarlo? Perderás los cambios que no guardaste."
+            : $"{p.Nombre} cambió fuera de MD Codex.\n¿Quieres recargarlo?";
+        if ((p.Modificado || Config.CambioExterno == CambioExterno.Preguntar)
+            && MessageBox.Show(this, pregunta, "MD Codex", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             p.CambioRechazado = texto;
             return;
@@ -1050,7 +1122,7 @@ public partial class MainWindow : Window
             nodo = nodo.Padre;
         if (nodo is null)
             return;
-        nodo.EspacioDe.Carpetas.RemoveAll(c => string.Equals(c, nodo.Ruta, StringComparison.OrdinalIgnoreCase));
+        nodo.EspacioDe!.Carpetas.RemoveAll(c => string.Equals(c, nodo.Ruta, StringComparison.OrdinalIgnoreCase));
         _recientes.Guardar();
         RefrescarArbol();
         AplicarLateral();
@@ -1167,6 +1239,28 @@ public partial class MainWindow : Window
 
     private string? RaizDe(string ruta) => _carpetas.FirstOrDefault(c => Documentos.EstaDentro(ruta, c));
 
+    // Sección "Documentos", arriba de los espacios de trabajo: los abiertos que no están en ningún espacio
+    // y los recientes. Se rehace sola (sin rearmar el árbol) al abrir o cerrar pestañas y al cambiar los recientes.
+    private NodoArchivo? _documentos;
+
+    private void ActualizarDocumentos()
+    {
+        if (_documentos is null)
+        {
+            _documentos = NodoArchivo.DeDocumentos(_recientes.DocumentosExpandido);
+            _documentos.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(NodoArchivo.Expandido))
+                    return;
+                _recientes.DocumentosExpandido = _documentos.Expandido;
+                _recientes.Guardar();
+            };
+        }
+        var abiertos = _pestanas.Where(p => p.Ruta is not null && RaizDe(p.Ruta) is null).Select(p => p.Ruta!);
+        _documentos.LlenarDocumentos(abiertos, _recientes.Archivos);
+        RevelarActual();
+    }
+
     // Rearma el árbol (espacios, y debajo sus carpetas) conservando lo expandido; las carpetas recién
     // agregadas se abren.
     private void RefrescarArbol()
@@ -1178,7 +1272,8 @@ public partial class MainWindow : Window
         var espacios = _recientes.Espacios.Select(NodoArchivo.DeEspacio).ToList();
         foreach (var espacio in espacios)
             NodoArchivo.Expandir(espacio.Hijos, expandidas);
-        Arbol.ItemsSource = espacios;
+        ActualizarDocumentos();
+        Arbol.ItemsSource = new[] { _documentos! }.Concat(espacios).ToList();
         RevelarActual();
 
         var carpetas = _carpetas.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1194,6 +1289,7 @@ public partial class MainWindow : Window
     // espacio. Sin nodo, la del documento activo si está en algún espacio, o la primera carpeta.
     private string? CarpetaDestino(NodoArchivo? nodo) => nodo switch
     {
+        { EnDocumentos: true } => null,
         { Espacio: { } espacio } => espacio.Carpetas.FirstOrDefault(),
         { EsCarpeta: true } => nodo.Ruta,
         { } => Path.GetDirectoryName(nodo.Ruta),
@@ -1584,7 +1680,17 @@ public partial class MainWindow : Window
         var fondo = Tema.Color(p.Fondo);
         Visor.DefaultBackgroundColor = System.Drawing.Color.FromArgb(fondo.A, fondo.R, fondo.G, fondo.B);
         VisorPro.DefaultBackgroundColor = Visor.DefaultBackgroundColor;
+        // La vista y el editor por bloques comparten el perfil de WebView2: basta con uno.
+        if (Visor.CoreWebView2 is { } core)
+            core.Profile.PreferredColorScheme = EsquemaWeb();
     }
+
+    private static CoreWebView2PreferredColorScheme EsquemaWeb() => Tema.Preferido switch
+    {
+        TemaPreferido.Claro => CoreWebView2PreferredColorScheme.Light,
+        TemaPreferido.Oscuro => CoreWebView2PreferredColorScheme.Dark,
+        _ => CoreWebView2PreferredColorScheme.Auto,
+    };
 
     private void AlCambiarPreferencias(object sender, UserPreferenceChangedEventArgs e)
     {
@@ -1898,6 +2004,12 @@ public partial class MainWindow : Window
 
     private void Arbol_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
+        // Documentos no es un lugar del disco ni un espacio de trabajo: sin menú.
+        if (_nodoMenu is { EnDocumentos: true })
+        {
+            e.Handled = true;
+            return;
+        }
         MenuNuevoArchivoArbol.IsEnabled = CarpetaDestino(_nodoMenu) is not null;
         MenuQuitarCarpeta.IsEnabled = _nodoMenu is { EsEspacio: false };
         MenuRenombrarEspacio.IsEnabled = _nodoMenu is not null;
@@ -1988,7 +2100,7 @@ public partial class MainWindow : Window
     // Carpeta donde caería un archivo soltado sobre esa fila: la carpeta misma o la del archivo.
     private static string? CarpetaBajo(DragEventArgs e) => Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext switch
     {
-        NodoArchivo { EsEspacio: true } or null => null,
+        NodoArchivo { EsEspacio: true } or NodoArchivo { EnDocumentos: true } or null => null,
         NodoArchivo { EsCarpeta: true } carpeta => carpeta.Ruta,
         NodoArchivo archivo => Path.GetDirectoryName(archivo.Ruta),
         _ => null,
@@ -2018,7 +2130,7 @@ public partial class MainWindow : Window
 
         // Un espacio soltado sobre cualquier fila de otro: hacia arriba queda antes de él, hacia abajo, después.
         if (e.Data.GetData(typeof(EspacioTrabajo)) is not EspacioTrabajo espacio
-            || Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is not NodoArchivo { EspacioDe: var destino }
+            || Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is not NodoArchivo { EspacioDe: { } destino }
             || destino == espacio)
             return;
         e.Handled = true;
@@ -2128,11 +2240,182 @@ public partial class MainWindow : Window
 
     private void VerConfiguracion_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Configuracion);
 
-    private void OpcionAjustarLineas_Click(object sender, RoutedEventArgs e)
+    // ---------- Configuración ----------
+
+    // Marca los controles del panel con lo guardado.
+    private void MostrarConfiguracion()
     {
-        _recientes.AjustarLineas = OpcionAjustarLineas.IsChecked == true;
+        _mostrandoConfiguracion = true;
+        var elegidas = new Dictionary<string, string>
+        {
+            ["Tema"] = Config.Tema.ToString(),
+            ["ModoInicial"] = Config.ModoInicial.ToString(),
+            ["CambioExterno"] = Config.CambioExterno.ToString(),
+            ["GuardadoAutomatico"] = Config.GuardadoAutomatico.ToString(),
+            ["AnchoVista"] = Config.AnchoVista.ToString(),
+            ["AnchoBloques"] = Config.AnchoBloques.ToString(),
+        };
+        foreach (var opcion in Descendientes<RadioButton>(PanelConfiguracion))
+            opcion.IsChecked = elegidas[opcion.GroupName] == (string)opcion.Tag;
+        OpcionReabrirSesion.IsChecked = Config.ReabrirSesion;
+        OpcionBuscarActualizaciones.IsChecked = Config.BuscarActualizaciones;
+        OpcionAjustarLineas.IsChecked = Config.AjustarLineas;
+        OpcionNumerosLinea.IsChecked = Config.NumerosLinea;
+        OpcionResaltarLinea.IsChecked = Config.ResaltarLinea;
+        OpcionSincronizarDesplazamiento.IsChecked = Config.SincronizarDesplazamiento;
+        CajaCarpetaImagenes.Text = Config.CarpetaImagenes;
+        _mostrandoConfiguracion = false;
+    }
+
+    private void Interruptor_Click(object sender, RoutedEventArgs e)
+    {
+        var activo = ((CheckBox)sender).IsChecked == true;
+        switch (((FrameworkElement)sender).Name)
+        {
+            case nameof(OpcionReabrirSesion): Config.ReabrirSesion = activo; break;
+            case nameof(OpcionBuscarActualizaciones): Config.BuscarActualizaciones = activo; break;
+            case nameof(OpcionAjustarLineas): Config.AjustarLineas = activo; break;
+            case nameof(OpcionNumerosLinea): Config.NumerosLinea = activo; break;
+            case nameof(OpcionResaltarLinea): Config.ResaltarLinea = activo; break;
+            case nameof(OpcionSincronizarDesplazamiento):
+                Config.SincronizarDesplazamiento = activo;
+                SincronizarScroll();
+                break;
+        }
         _recientes.Guardar();
-        Editor.WordWrap = _recientes.AjustarLineas;
+        AplicarEditor();
+    }
+
+    private void Opcion_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_mostrandoConfiguracion)
+            return;
+        var opcion = (RadioButton)sender;
+        var valor = (string)opcion.Tag;
+        switch (opcion.GroupName)
+        {
+            case "Tema":
+                Config.Tema = Tema.Preferido = Enum.Parse<TemaPreferido>(valor);
+                AplicarTema();
+                break;
+            case "ModoInicial":
+                Config.ModoInicial = Enum.Parse<ModoInicial>(valor);
+                break;
+            case "CambioExterno":
+                Config.CambioExterno = Enum.Parse<CambioExterno>(valor);
+                break;
+            case "GuardadoAutomatico":
+                Config.GuardadoAutomatico = Enum.Parse<GuardadoAutomatico>(valor);
+                _guardadoDiferido.Stop();
+                break;
+            case "AnchoVista":
+                Config.AnchoVista = Enum.Parse<Ancho>(valor);
+                EnviarAncho();
+                break;
+            case "AnchoBloques":
+                Config.AnchoBloques = Enum.Parse<Ancho>(valor);
+                EnviarAnchoPro();
+                break;
+        }
+        _recientes.Guardar();
+    }
+
+    private void CajaCarpetaImagenes_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+        e.Handled = true;
+        AplicarCarpetaImagenes();
+    }
+
+    private void CajaCarpetaImagenes_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => AplicarCarpetaImagenes();
+
+    // Se guarda ya validada; si no sirve, vuelve a la de siempre y la caja lo muestra.
+    private void AplicarCarpetaImagenes()
+    {
+        Config.CarpetaImagenes = Imagenes.Carpeta = Configuracion.CarpetaValida(CajaCarpetaImagenes.Text);
+        CajaCarpetaImagenes.Text = Config.CarpetaImagenes;
+        _recientes.Guardar();
+    }
+
+    // Opciones del editor de texto (y su tamaño de letra, que sigue al zoom).
+    private const double TamanoEditor = 14;
+
+    private void AplicarEditor()
+    {
+        Editor.WordWrap = Config.AjustarLineas;
+        Editor.ShowLineNumbers = Config.NumerosLinea;
+        Editor.Options.HighlightCurrentLine = Config.ResaltarLinea;
+        // Al mostrarlos se crea otro margen de números: el aire hasta la línea divisoria va en cada uno.
+        foreach (var margen in Editor.TextArea.LeftMargins.OfType<LineNumberMargin>())
+            margen.Margin = new Thickness(0, 0, 8, 0);
+    }
+
+    // Vista previa y editor por bloques: texto centrado con un ancho cómodo, o todo el ancho.
+    private void EnviarAncho()
+    {
+        if (_vistaLista)
+            Enviar(new { tipo = "ancho", completo = Config.AnchoVista == Ancho.Completo });
+    }
+
+    private void EnviarAnchoPro()
+    {
+        if (_proListo)
+            EnviarPro(new { tipo = "ancho", completo = Config.AnchoBloques == Ancho.Completo });
+    }
+
+    // ---------- Zoom ----------
+
+    // Un solo nivel para el editor, la vista y el editor por bloques; se cambia desde la barra de estado,
+    // con Ctrl + / Ctrl - / Ctrl 0 o con Ctrl + rueda. Los pasos son los de los navegadores.
+    private static readonly double[] NivelesZoom = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+
+    private void CambiarZoom(int direccion)
+    {
+        var actual = Config.Zoom;
+        var nivel = direccion > 0
+            ? NivelesZoom.FirstOrDefault(n => n > actual + 0.001, NivelesZoom[^1])
+            : NivelesZoom.LastOrDefault(n => n < actual - 0.001, NivelesZoom[0]);
+        FijarZoom(nivel);
+    }
+
+    private void FijarZoom(double zoom)
+    {
+        zoom = Math.Clamp(Math.Round(zoom, 2), NivelesZoom[0], NivelesZoom[^1]);
+        if (Math.Abs(zoom - Config.Zoom) < 0.001)
+            return;
+        Config.Zoom = zoom;
+        _recientes.Guardar();
+        AplicarZoom();
+    }
+
+    private void AplicarZoom()
+    {
+        Editor.FontSize = TamanoEditor * Config.Zoom;
+        // Las vistas toman el zoom al iniciarse; después, solo si cambia (asignarlo dispara ZoomFactorChanged,
+        // que vuelve a FijarZoom y ahí se corta).
+        if (Visor.CoreWebView2 is not null && Math.Abs(Visor.ZoomFactor - Config.Zoom) > 0.001)
+            Visor.ZoomFactor = Config.Zoom;
+        if (VisorPro.CoreWebView2 is not null && Math.Abs(VisorPro.ZoomFactor - Config.Zoom) > 0.001)
+            VisorPro.ZoomFactor = Config.Zoom;
+        EstadoZoom.Content = $"{Config.Zoom * 100:0} %";
+    }
+
+    private void Acercar_Executed(object sender, ExecutedRoutedEventArgs e) => CambiarZoom(1);
+
+    private void Alejar_Executed(object sender, ExecutedRoutedEventArgs e) => CambiarZoom(-1);
+
+    private void ZoomNormal_Executed(object sender, ExecutedRoutedEventArgs e) => FijarZoom(1);
+
+    private static IEnumerable<T> Descendientes<T>(DependencyObject raiz) where T : DependencyObject
+    {
+        foreach (var hijo in LogicalTreeHelper.GetChildren(raiz).OfType<DependencyObject>())
+        {
+            if (hijo is T encontrado)
+                yield return encontrado;
+            foreach (var nieto in Descendientes<T>(hijo))
+                yield return nieto;
+        }
     }
 
     private void AlternarLateral_Executed(object sender, ExecutedRoutedEventArgs e)

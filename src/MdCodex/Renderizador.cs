@@ -109,6 +109,8 @@ public static partial class Renderizador
               resaltarCodigo();
               dibujarDiagramas();
               if (m.scroll != null) moverDesdeApp(m.scroll);
+            } else if (m.tipo === 'ancho') {
+              document.body.classList.toggle('completo', m.completo);
             } else if (m.tipo === 'linea') {
               totalLineas = m.total;
               moverDesdeApp(m.final ? document.documentElement.scrollHeight : yDeLinea(m.linea));
@@ -310,6 +312,8 @@ public static partial class Renderizador
           word-wrap: break-word;
         }
         main { max-width: 860px; margin: 0 auto; padding: 32px 40px 64px; }
+        /* Configuración "Todo el ancho". */
+        body.completo main { max-width: none; }
         h1, h2, h3, h4, h5, h6 { margin: 1.5em 0 .5em; line-height: 1.25; font-weight: 600; }
         h1 { font-size: 2em; padding-bottom: .3em; border-bottom: 1px solid var(--borde); }
         h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--borde); }

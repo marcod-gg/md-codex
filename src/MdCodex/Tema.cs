@@ -26,7 +26,17 @@ public static class Tema
         ChromeFondo: "#010409", Lateral: "#11161D", ChromeBorde: "#3D444D", ChromeTexto: "#E6EDF3", ChromeTenue: "#9198A1",
         ChromeHover: "#1AFFFFFF", ChromeActivo: "#2AFFFFFF", Acento: "#4493F8");
 
-    public static Paleta Actual() => EsOscuro() ? Oscura : Clara;
+    // Elegido en la configuración; con Sistema se sigue a Windows.
+    public static TemaPreferido Preferido { get; set; } = TemaPreferido.Sistema;
+
+    public static bool Oscuro => Preferido switch
+    {
+        TemaPreferido.Claro => false,
+        TemaPreferido.Oscuro => true,
+        _ => EsOscuro(),
+    };
+
+    public static Paleta Actual() => Oscuro ? Oscura : Clara;
 
     public static Color Color(string hex) => (Color)ColorConverter.ConvertFromString(hex);
 

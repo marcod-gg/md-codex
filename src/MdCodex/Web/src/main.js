@@ -180,6 +180,7 @@ anfitrion?.addEventListener('message', e => {
   else if (m.tipo === 'titulo') irATitulo(m.indice);
   else if (m.tipo === 'enfocar') raiz.querySelector('.ProseMirror')?.focus();
   else if (m.tipo === 'insertarImagen' && m.id === pestana) insertarImagen(m);
+  else if (m.tipo === 'ancho') document.body.classList.toggle('completo', m.completo);
 });
 
 await crepe.create();
