@@ -6,6 +6,8 @@
   --superficie: #f6f8fa;
   --tenue: #59636e;
   --borde: #d1d9e0;
+  /* Íconos y marcas del editor (asa de bloques, menús): más contraste que el borde, menos que el texto. */
+  --icono: #8c959f;
   --acento: #0969da;
   --acento-suave: #ddf4ff;
   --codigo: #953800;
@@ -22,6 +24,7 @@
     --superficie: #161b22;
     --tenue: #9198a1;
     --borde: #3d444d;
+    --icono: #7d8590;
     --acento: #4493f8;
     --acento-suave: #253247;
     --codigo: #ffa657;
@@ -44,7 +47,7 @@ html, body {
   --crepe-color-surface-low: var(--superficie);
   --crepe-color-on-surface: var(--texto);
   --crepe-color-on-surface-variant: var(--tenue);
-  --crepe-color-outline: var(--borde);
+  --crepe-color-outline: var(--icono);
   --crepe-color-primary: var(--acento);
   --crepe-color-secondary: var(--acento-suave);
   --crepe-color-on-secondary: var(--texto);
@@ -66,6 +69,34 @@ html, body {
 #editor {
   max-width: 900px;
   margin: 0 auto;
+}
+
+/* Crepe dibuja tablas, separadores y citas con su color de contorno casi transparente, y numera las
+   listas con ese mismo color: en oscuro apenas se ven. Se igualan a la vista previa de la app. */
+.milkdown .milkdown-table-block th,
+.milkdown .milkdown-table-block td {
+  border: 1px solid var(--borde);
+}
+
+.milkdown .milkdown-table-block th {
+  background: var(--superficie);
+  font-weight: 600;
+}
+
+.milkdown .milkdown-list-item-block li .label-wrapper {
+  color: var(--texto);
+}
+
+.milkdown .milkdown-list-item-block li .label-wrapper svg {
+  fill: var(--texto);
+}
+
+.milkdown .ProseMirror hr {
+  background-color: var(--borde);
+}
+
+.milkdown .ProseMirror blockquote::before {
+  background: var(--borde);
 }
 
 /* Espacio a la izquierda para el asa de los bloques, y abajo para seguir escribiendo cómodo. */
