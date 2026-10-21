@@ -124,6 +124,7 @@ public partial class MainWindow : Window
 
         Tema.Preferido = Config.Tema;
         Imagenes.Carpeta = Config.CarpetaImagenes;
+        NodoArchivo.MostrarRutas = MenuMostrarRutas.IsChecked = Config.MostrarRutasCarpetas;
         MostrarConfiguracion();
         AplicarEditor();
         AplicarZoom();
@@ -2198,28 +2199,119 @@ public partial class MainWindow : Window
             && Math.Abs(distancia.Y) < SystemParameters.MinimumVerticalDragDistance)
             return;
         _nodoArrastrado = null;
-        var datos = nodo.Espacio is { } espacio ? new DataObject(typeof(EspacioTrabajo), espacio) : new DataObject(typeof(NodoArchivo), nodo);
-        DragDrop.DoDragDrop(Arbol, datos, DragDropEffects.Move);
+        if (nodo.Espacio is not { } espacio)
+        {
+            try
+            {
+                DragDrop.DoDragDrop(Arbol, new DataObject(typeof(NodoArchivo), nodo), DragDropEffects.Move);
+            }
+            finally
+            {
+                MarcarDestino(null);
+            }
+            return;
+        }
+
+        // Al arrastrar un espacio, todos se pliegan (solo se ven los nombres) y al soltar o cancelar vuelven a
+        // quedar como estaban. Lo plegado no se guarda: Arbol_Drop repone el estado antes de guardar.
+        var nodos = Arbol.ItemsSource as IEnumerable<NodoArchivo> ?? [];
+        _expansionAlArrastrar = nodos.Where(n => n.Espacio is not null).ToDictionary(n => n.Espacio!, n => n.Expandido);
+        foreach (var n in nodos)
+            n.Expandido = false;
+        try
+        {
+            DragDrop.DoDragDrop(Arbol, new DataObject(typeof(EspacioTrabajo), espacio), DragDropEffects.Move);
+        }
+        finally
+        {
+            LineaDestino.Visibility = Visibility.Collapsed;
+            ReponerExpansion(); // si se canceló, no hubo Drop que lo repusiera
+        }
     }
 
-    // Carpeta donde caería un archivo soltado sobre esa fila: la carpeta misma o la del archivo.
-    private static string? CarpetaBajo(DragEventArgs e) => Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext switch
+    private void ReponerExpansion()
+    {
+        if (_expansionAlArrastrar is not { } antes)
+            return;
+        _expansionAlArrastrar = null;
+        foreach (var n in Arbol.ItemsSource as IEnumerable<NodoArchivo> ?? [])
+            if (n.Espacio is { } espacio && antes.TryGetValue(espacio, out var expandido))
+                n.Expandido = expandido;
+    }
+
+    // Cómo estaba cada espacio de trabajo (expandido o plegado) antes de empezar a arrastrar uno.
+    private Dictionary<EspacioTrabajo, bool>? _expansionAlArrastrar;
+    // Carpeta resaltada como destino del archivo que se arrastra.
+    private NodoArchivo? _destinoMarcado;
+
+    private void MarcarDestino(NodoArchivo? carpeta)
+    {
+        if (_destinoMarcado == carpeta)
+            return;
+        if (_destinoMarcado is not null)
+            _destinoMarcado.EsDestino = false;
+        _destinoMarcado = carpeta;
+        if (carpeta is not null)
+            carpeta.EsDestino = true;
+    }
+
+    // Carpeta donde caería un archivo soltado sobre esa fila: la carpeta misma o la que contiene el archivo.
+    private static NodoArchivo? CarpetaBajo(DragEventArgs e) => Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext switch
     {
         NodoArchivo { EsEspacio: true } or NodoArchivo { EnDocumentos: true } or null => null,
-        NodoArchivo { EsCarpeta: true } carpeta => carpeta.Ruta,
-        NodoArchivo archivo => Path.GetDirectoryName(archivo.Ruta),
+        NodoArchivo { EsCarpeta: true } carpeta => carpeta,
+        NodoArchivo { Padre: { EsCarpeta: true } padre } => padre,
         _ => null,
     };
+
+    // Dónde quedaría un espacio soltado: antes o después del espacio bajo el mouse, según la mitad de su
+    // fila. Null si no hay espacio debajo o si quedaría donde ya está.
+    private (EspacioTrabajo Destino, bool Despues, TreeViewItem Fila)? DestinoEspacio(DragEventArgs e, EspacioTrabajo arrastrado)
+    {
+        var item = Ancestro<TreeViewItem>(e.OriginalSource);
+        while (item is not null && ItemsControl.ItemsControlFromItemContainer(item) != Arbol)
+            item = ItemsControl.ItemsControlFromItemContainer(item) as TreeViewItem;
+        if (item?.DataContext is not NodoArchivo { Espacio: { } destino })
+            return null;
+        var despues = e.GetPosition(item).Y > item.ActualHeight / 2;
+        var origen = _recientes.Espacios.IndexOf(arrastrado);
+        var indice = _recientes.Espacios.IndexOf(destino) + (despues ? 1 : 0);
+        if (indice == origen || indice == origen + 1)
+            return null;
+        return (destino, despues, item);
+    }
 
     private void Arbol_DragOver(object sender, DragEventArgs e)
     {
         if (e.Data.GetData(typeof(NodoArchivo)) is NodoArchivo archivo)
-            e.Effects = CarpetaBajo(e) is { } carpeta && !string.Equals(carpeta, Path.GetDirectoryName(archivo.Ruta), StringComparison.OrdinalIgnoreCase)
-                ? DragDropEffects.Move : DragDropEffects.None;
-        else if (e.Data.GetDataPresent(typeof(EspacioTrabajo)))
-            e.Effects = Ancestro<TreeViewItem>(e.OriginalSource) is null ? DragDropEffects.None : DragDropEffects.Move;
+        {
+            var carpeta = CarpetaBajo(e);
+            var valida = carpeta is not null && !string.Equals(carpeta.Ruta, Path.GetDirectoryName(archivo.Ruta), StringComparison.OrdinalIgnoreCase);
+            MarcarDestino(valida ? carpeta : null);
+            e.Effects = valida ? DragDropEffects.Move : DragDropEffects.None;
+        }
+        else if (e.Data.GetData(typeof(EspacioTrabajo)) is EspacioTrabajo espacio)
+        {
+            var destino = DestinoEspacio(e, espacio);
+            if (destino is { } d)
+            {
+                // La línea va en el borde de arriba o de abajo de la fila del espacio destino.
+                var arriba = d.Fila.TranslatePoint(new Point(0, d.Despues ? d.Fila.ActualHeight : 0), CapaArrastre);
+                Canvas.SetLeft(LineaDestino, arriba.X);
+                Canvas.SetTop(LineaDestino, arriba.Y - LineaDestino.Height / 2);
+                LineaDestino.Width = d.Fila.ActualWidth;
+                LineaDestino.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                LineaDestino.Visibility = Visibility.Collapsed;
+            }
+            e.Effects = destino is null ? DragDropEffects.None : DragDropEffects.Move;
+        }
         else
+        {
             return;
+        }
         e.Handled = true;
     }
 
@@ -2228,20 +2320,25 @@ public partial class MainWindow : Window
         if (e.Data.GetData(typeof(NodoArchivo)) is NodoArchivo archivo)
         {
             e.Handled = true;
+            MarcarDestino(null);
             if (CarpetaBajo(e) is { } carpeta)
-                MoverArchivo(archivo.Ruta, carpeta);
+                MoverArchivo(archivo.Ruta, carpeta.Ruta);
             return;
         }
 
-        // Un espacio soltado sobre cualquier fila de otro: hacia arriba queda antes de él, hacia abajo, después.
-        if (e.Data.GetData(typeof(EspacioTrabajo)) is not EspacioTrabajo espacio
-            || Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is not NodoArchivo { EspacioDe: { } destino }
-            || destino == espacio)
+        if (e.Data.GetData(typeof(EspacioTrabajo)) is not EspacioTrabajo espacio)
             return;
         e.Handled = true;
-        var indice = _recientes.Espacios.IndexOf(destino);
-        _recientes.Espacios.Remove(espacio);
-        _recientes.Espacios.Insert(indice, espacio);
+        LineaDestino.Visibility = Visibility.Collapsed;
+        var destino = DestinoEspacio(e, espacio);
+        // Antes de guardar y rearmar el árbol, cada espacio vuelve a quedar expandido o plegado como estaba
+        // (en sus nodos, así al rearmarlo se ven las carpetas que tenían abiertas).
+        ReponerExpansion();
+        if (destino is { } d)
+        {
+            _recientes.Espacios.Remove(espacio);
+            _recientes.Espacios.Insert(_recientes.Espacios.IndexOf(d.Destino) + (d.Despues ? 1 : 0), espacio);
+        }
         _recientes.Guardar();
         RefrescarArbol();
     }
@@ -2344,6 +2441,14 @@ public partial class MainWindow : Window
     private void VerEsquema_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Esquema);
 
     private void VerDocumentos_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Documentos);
+
+    // Ver → Mostrar la ruta de las carpetas: el árbol se rehace con o sin la ruta junto al nombre.
+    private void MostrarRutas_Click(object sender, RoutedEventArgs e)
+    {
+        Config.MostrarRutasCarpetas = NodoArchivo.MostrarRutas = MenuMostrarRutas.IsChecked;
+        _recientes.Guardar();
+        RefrescarArbol();
+    }
 
     // Ctrl+, o el engranaje: abre la ventana de configuración, o la cierra si ya está abierta.
     private void VerConfiguracion_Executed(object sender, ExecutedRoutedEventArgs e)

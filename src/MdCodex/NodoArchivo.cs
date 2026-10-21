@@ -63,6 +63,25 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     // Documento recién agregado a un grupo: su fila aparece con animación la primera vez que se muestra.
     public bool Entrando { get; set; }
 
+    // Ver → Mostrar la ruta de las carpetas: las carpetas de un espacio de trabajo llevan su ruta junto al
+    // nombre. Se lee al armar el árbol (al cambiarla, el árbol se rehace).
+    public static bool MostrarRutas { get; set; }
+    public string Descripcion => EsRaiz && MostrarRutas ? "   " + Ruta : "";
+
+    // Carpeta donde caería lo que se está arrastrando: su fila se resalta.
+    private bool _esDestino;
+    public bool EsDestino
+    {
+        get => _esDestino;
+        set
+        {
+            if (_esDestino == value)
+                return;
+            _esDestino = value;
+            Avisar(nameof(EsDestino));
+        }
+    }
+
     private bool _oculto;
     public bool Oculto
     {

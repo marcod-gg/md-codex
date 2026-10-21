@@ -37,6 +37,9 @@ public sealed class Configuracion
     // Imágenes: una carpeta fija (ruta completa) o, si es solo un nombre, una carpeta junto a cada documento.
     public string CarpetaImagenes { get; set; } = CarpetaImagenesPorDefecto;
 
+    // Ver → Mostrar la ruta de las carpetas (en Espacios de trabajo).
+    public bool MostrarRutasCarpetas { get; set; }
+
     // Zoom de lo que se está viendo (editor, vista o bloques), desde la barra de estado.
     public double Zoom { get; set; } = 1;
 
