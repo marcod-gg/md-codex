@@ -34,6 +34,8 @@ public sealed class Recientes
     public Sesion? UltimaSesion { get; set; }
     // Preferencia de la barra lateral: fija (siempre abierta) o automática (se despliega al tocar un ícono).
     public bool LateralFijo { get; set; } = true;
+    // Configuración del editor de texto: ajustar las líneas largas al ancho (si no, se desplazan en horizontal).
+    public bool AjustarLineas { get; set; } = true;
     // En el orden en que se muestran (se reordenan arrastrándolos).
     public List<EspacioTrabajo> Espacios { get; set; } = [];
 

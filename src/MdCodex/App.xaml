@@ -238,6 +238,44 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Divisor entre el editor y la vista: siempre visible, con el acento al pasar el mouse o arrastrar. -->
+        <Style x:Key="DivisorVisible" TargetType="GridSplitter" BasedOn="{StaticResource Divisor}">
+            <Setter Property="Background" Value="{DynamicResource Chrome.Borde}" />
+        </Style>
+
+        <!-- Interruptor de la configuración: píldora que se llena con el acento al activarse -->
+        <Style x:Key="Interruptor" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Width="36" Height="20" Background="Transparent">
+                            <Border x:Name="Pista" CornerRadius="10" BorderThickness="1"
+                                    BorderBrush="{DynamicResource Chrome.Tenue}" Background="Transparent" />
+                            <Ellipse x:Name="Perilla" Width="12" Height="12" Margin="4,0" HorizontalAlignment="Left"
+                                     Fill="{DynamicResource Chrome.Tenue}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Pista" Property="BorderBrush" Value="{DynamicResource Chrome.Texto}" />
+                                <Setter TargetName="Perilla" Property="Fill" Value="{DynamicResource Chrome.Texto}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Pista" Property="Background" Value="{DynamicResource Acento}" />
+                                <Setter TargetName="Pista" Property="BorderBrush" Value="{DynamicResource Acento}" />
+                                <Setter TargetName="Perilla" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="Perilla" Property="Fill" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Pista" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="EtiquetaTenue" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Chrome.Tenue}" />
             <Setter Property="FontSize" Value="11" />

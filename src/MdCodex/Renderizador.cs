@@ -95,6 +95,10 @@ public static partial class Renderizador
           const base = document.querySelector('base');
           let pestana = 0;
           let avisoPendiente = false;
+          // Total de líneas del documento en el editor, para ubicar el final.
+          let totalLineas = 0;
+          // Mientras la app mueve la vista, el scroll no se devuelve al editor (no se rebota).
+          let desdeApp = false;
 
           chrome.webview.addEventListener('message', e => {
             const m = e.data;
@@ -104,19 +108,45 @@ public static partial class Renderizador
               main.innerHTML = m.html;
               resaltarCodigo();
               dibujarDiagramas();
-              if (m.scroll != null) scrollTo(0, m.scroll);
+              if (m.scroll != null) moverDesdeApp(m.scroll);
             } else if (m.tipo === 'linea') {
-              irALinea(m.linea);
+              totalLineas = m.total;
+              moverDesdeApp(m.final ? document.documentElement.scrollHeight : yDeLinea(m.linea));
             }
           });
 
-          // Lleva a la vista el último bloque que empieza en o antes de la línea indicada del editor.
-          function irALinea(linea) {
-            let destino = null;
+          function moverDesdeApp(y) {
+            desdeApp = true;
+            scrollTo(0, y);
+            setTimeout(() => desdeApp = false, 60);
+          }
+
+          // Puntos de referencia entre el texto y la página: la línea de origen de cada bloque y dónde
+          // quedó dibujado, en orden. Entre dos puntos se interpola, así el scroll avanza parejo.
+          function anclas() {
+            const lista = [{ linea: 0, y: 0 }];
             for (const el of main.querySelectorAll('[data-line]')) {
-              if (+el.dataset.line <= linea) destino = el; else break;
+              const linea = +el.dataset.line, y = el.getBoundingClientRect().top + scrollY;
+              const ultima = lista[lista.length - 1];
+              if (linea > ultima.linea && y >= ultima.y) lista.push({ linea, y });
             }
-            scrollTo({ top: destino ? destino.getBoundingClientRect().top + scrollY - 16 : 0 });
+            const fin = document.documentElement.scrollHeight;
+            if (totalLineas > lista[lista.length - 1].linea) lista.push({ linea: totalLineas, y: fin });
+            return lista;
+          }
+
+          function yDeLinea(linea) {
+            const a = anclas();
+            for (let i = 1; i < a.length; i++)
+              if (a[i].linea > linea) return a[i - 1].y + (a[i].y - a[i - 1].y) * (linea - a[i - 1].linea) / (a[i].linea - a[i - 1].linea);
+            return a[a.length - 1].y;
+          }
+
+          function lineaDeY(y) {
+            const a = anclas();
+            for (let i = 1; i < a.length; i++)
+              if (a[i].y > y) return a[i - 1].linea + (a[i].linea - a[i - 1].linea) * (y - a[i - 1].y) / ((a[i].y - a[i - 1].y) || 1);
+            return a[a.length - 1].linea;
           }
 
           // Avisa a la app dónde quedó el scroll de cada pestaña, para restaurarlo al volver a ella.
@@ -127,6 +157,18 @@ public static partial class Renderizador
               avisoPendiente = false;
               chrome.webview.postMessage({ tipo: 'scroll', id: pestana, y: scrollY });
             }, 150);
+          });
+
+          // Al desplazar la vista, el editor la sigue (la app lo usa solo en el modo dividido).
+          let lineaPendiente = false;
+          addEventListener('scroll', () => {
+            if (desdeApp || lineaPendiente) return;
+            lineaPendiente = true;
+            requestAnimationFrame(() => {
+              lineaPendiente = false;
+              const final = scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
+              chrome.webview.postMessage({ tipo: 'lineaVista', linea: lineaDeY(scrollY), final });
+            });
           });
 
           // Resaltado de los bloques con lenguaje (```csharp …). Sin lenguaje no se adivina: suele equivocarse.

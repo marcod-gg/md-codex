@@ -12,6 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
+using ICSharpCode.AvalonEdit.Editing;
 using ICSharpCode.AvalonEdit.Search;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
@@ -26,7 +27,7 @@ public partial class MainWindow : Window
     // ".mdcodex" para no chocar con el filtro que sirve los archivos de los documentos.
     private const string HostPro = "mdcodex.editor";
 
-    private enum Panel { Explorador, Esquema }
+    private enum Panel { Explorador, Esquema, Configuracion }
 
     private readonly ObservableCollection<Pestana> _pestanas = [];
     // Documento vacío que muestra el editor cuando no hay pestañas abiertas.
@@ -86,6 +87,12 @@ public partial class MainWindow : Window
         Editor.TextArea.TextView.ScrollOffsetChanged += (_, _) => SincronizarScroll();
         Editor.Options.HighlightCurrentLine = true;
         SearchPanel.Install(Editor);
+        // Aire a ambos lados de la línea que separa los números del texto.
+        foreach (var margen in Editor.TextArea.LeftMargins.OfType<LineNumberMargin>())
+            margen.Margin = new Thickness(0, 0, 8, 0);
+        Editor.TextArea.TextView.Margin = new Thickness(10, 0, 0, 0);
+        Editor.WordWrap = _recientes.AjustarLineas;
+        OpcionAjustarLineas.IsChecked = _recientes.AjustarLineas;
 
         PreviewDragEnter += Ventana_PreviewDragOver;
         PreviewDragOver += Ventana_PreviewDragOver;
@@ -312,14 +319,55 @@ public partial class MainWindow : Window
         SincronizarScroll();
     }
 
-    // En modo dividido, la vista sigue a la primera línea visible del editor.
+    // En modo dividido, editor y vista se siguen. Se envía la línea que queda arriba (desde 0, con la
+    // fracción ya desplazada de esa línea) y si se llegó al final; la vista interpola entre sus bloques.
+    // Mientras se aplica un scroll que vino de la vista, no se devuelve (no se rebota).
+    private bool _scrollDesdeVista;
+
     private void SincronizarScroll()
     {
-        if (!_vistaLista || _modo != Modo.Dividido || _activa is null)
+        if (!_vistaLista || _modo != Modo.Dividido || _activa is null || _scrollDesdeVista)
             return;
 
         var vista = Editor.TextArea.TextView;
-        Enviar(new { tipo = "linea", linea = vista.GetDocumentLineByVisualTop(vista.ScrollOffset.Y).LineNumber - 1 });
+        var y = vista.ScrollOffset.Y;
+        var linea = vista.GetDocumentLineByVisualTop(y);
+        var (arriba, abajo) = LimitesDeLinea(vista, linea.LineNumber);
+        var fraccion = abajo > arriba ? (y - arriba) / (abajo - arriba) : 0;
+        var final = y > 0 && y + vista.ActualHeight >= vista.DocumentHeight - 1;
+        Enviar(new { tipo = "linea", linea = linea.LineNumber - 1 + fraccion, total = Editor.Document.LineCount, final });
+    }
+
+    // Lleva el editor a la línea (desde 0, con fracción) que la vista tiene arriba.
+    private void SeguirVista(double linea, bool final)
+    {
+        if (_modo != Modo.Dividido || _activa is null)
+            return;
+
+        var vista = Editor.TextArea.TextView;
+        double y;
+        if (final)
+        {
+            y = vista.DocumentHeight;
+        }
+        else
+        {
+            var numero = Math.Clamp((int)Math.Floor(linea) + 1, 1, Editor.Document.LineCount);
+            var (arriba, abajo) = LimitesDeLinea(vista, numero);
+            y = arriba + (abajo - arriba) * Math.Clamp(linea - Math.Floor(linea), 0, 1);
+        }
+        _scrollDesdeVista = true;
+        Editor.ScrollToVerticalOffset(y);
+        // El scroll del editor se aplica en el próximo layout; recién después se vuelve a escuchar.
+        Dispatcher.BeginInvoke(() => _scrollDesdeVista = false, DispatcherPriority.Background);
+    }
+
+    // Dónde empieza y termina una línea del documento (con ajuste de línea puede ocupar varias).
+    private static (double Arriba, double Abajo) LimitesDeLinea(ICSharpCode.AvalonEdit.Rendering.TextView vista, int numero)
+    {
+        var arriba = vista.GetVisualTopByDocumentLine(numero);
+        var abajo = numero < vista.Document.LineCount ? vista.GetVisualTopByDocumentLine(numero + 1) : vista.DocumentHeight;
+        return (arriba, abajo);
     }
 
     private void Enviar(object mensaje) => Visor.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(mensaje));
@@ -391,6 +439,11 @@ public partial class MainWindow : Window
         {
             using var json = JsonDocument.Parse(e.WebMessageAsJson);
             var raiz = json.RootElement;
+            if (raiz.TryGetProperty("tipo", out var tipoVista) && tipoVista.GetString() == "lineaVista")
+            {
+                SeguirVista(raiz.GetProperty("linea").GetDouble(), raiz.GetProperty("final").GetBoolean());
+                return;
+            }
             if (raiz.TryGetProperty("tipo", out var tipo) && tipo.GetString() == "scroll"
                 && raiz.TryGetProperty("id", out var id) && raiz.TryGetProperty("y", out var y)
                 && _pestanas.FirstOrDefault(p => p.Id == id.GetInt32()) is { } pestana)
@@ -1222,13 +1275,21 @@ public partial class MainWindow : Window
             : "Barra lateral automática. Clic para dejarla siempre abierta (Ctrl+Mayús+B)";
         ActividadExplorador.IsChecked = visible && _panel == Panel.Explorador;
         ActividadEsquema.IsChecked = visible && _panel == Panel.Esquema;
+        ActividadConfiguracion.IsChecked = visible && _panel == Panel.Configuracion;
 
         var explorador = _panel == Panel.Explorador;
-        TituloLateral.Text = explorador ? "ESPACIOS DE TRABAJO" : "ESQUEMA";
+        var esquema = _panel == Panel.Esquema;
+        TituloLateral.Text = _panel switch
+        {
+            Panel.Explorador => "ESPACIOS DE TRABAJO",
+            Panel.Esquema => "ESQUEMA",
+            _ => "CONFIGURACIÓN",
+        };
         AccionesExplorador.Visibility = Visible(explorador);
         PanelExplorador.Visibility = Visible(explorador);
-        ListaEsquema.Visibility = Visible(!explorador && _titulos.Count > 0);
-        EsquemaVacio.Visibility = Visible(!explorador && _titulos.Count == 0);
+        ListaEsquema.Visibility = Visible(esquema && _titulos.Count > 0);
+        EsquemaVacio.Visibility = Visible(esquema && _titulos.Count == 0);
+        PanelConfiguracion.Visibility = Visible(_panel == Panel.Configuracion);
         EsquemaVacio.Text = _activa is null ? "No hay ningún documento abierto." : "El documento no tiene títulos.";
     }
 
@@ -2064,6 +2125,15 @@ public partial class MainWindow : Window
     private void VerExplorador_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Explorador);
 
     private void VerEsquema_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Esquema);
+
+    private void VerConfiguracion_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Configuracion);
+
+    private void OpcionAjustarLineas_Click(object sender, RoutedEventArgs e)
+    {
+        _recientes.AjustarLineas = OpcionAjustarLineas.IsChecked == true;
+        _recientes.Guardar();
+        Editor.WordWrap = _recientes.AjustarLineas;
+    }
 
     private void AlternarLateral_Executed(object sender, ExecutedRoutedEventArgs e)
     {
