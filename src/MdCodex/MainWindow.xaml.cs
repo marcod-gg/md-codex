@@ -99,6 +99,11 @@ public partial class MainWindow : Window
             {
                 RestaurarSesion();
             }
+
+            if (await Marca.BuscarActualizacionAsync() is { } nueva &&
+                MessageBox.Show(this, $"Hay una nueva versión de MD Codex ({nueva.Version}). ¿Quieres descargarla?",
+                    "MD Codex", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+                Marca.Abrir(nueva.Url);
         };
     }
 
