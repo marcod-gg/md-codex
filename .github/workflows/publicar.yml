@@ -40,6 +40,8 @@ jobs:
         run: |
           $tag = '${{ github.ref_name }}'
           $exe = "publicar\MDCodex-$env:VERSION-instalador.exe"
+          # El checkout deja el tag sin su mensaje; se trae completo para usarlo como notas.
+          git fetch --force origin "+refs/tags/${tag}:refs/tags/${tag}"
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $exe --clobber
