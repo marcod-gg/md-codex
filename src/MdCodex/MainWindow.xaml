@@ -17,6 +17,8 @@
              largos se cortan en seco en vez de terminar en "…" -->
         <Style x:Key="EstiloNodo" TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
             <Setter Property="IsExpanded" Value="{Binding Expandido, Mode=TwoWay}" />
+            <!-- Documentos: los recién llegados a un grupo entran con animación -->
+            <EventSetter Event="Loaded" Handler="Nodo_Loaded" />
             <Setter Property="Padding" Value="2,3" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -64,6 +66,12 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <!-- Grupo de Documentos sin documentos -->
+                <DataTrigger Binding="{Binding Oculto}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
         <HierarchicalDataTemplate x:Key="PlantillaNodo" DataType="{x:Type local:NodoArchivo}" ItemsSource="{Binding Hijos}">
             <!-- DockPanel y no StackPanel horizontal: así el nombre recibe el ancho que queda y puede cortarse -->

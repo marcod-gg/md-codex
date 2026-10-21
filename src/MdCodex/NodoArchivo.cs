@@ -48,38 +48,49 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     public bool EnDocumentos => EsGrupo || Padre?.EnDocumentos == true;
     private string? _iconoGrupo;
 
-    // Raíz (no se muestra) del panel Documentos; sus hijos son los grupos.
-    public static NodoArchivo DeDocumentos() => Grupo("Documentos", "", null, expandido: true);
-
-    // Rehace los grupos: "Abiertos" (sin espacio de trabajo) solo si hay alguno; "Recientes" siempre que haya.
-    public void LlenarDocumentos(IEnumerable<string> abiertos, IEnumerable<string> recientes)
+    // Raíz (no se muestra) del panel Documentos, con sus dos grupos; un grupo vacío se oculta.
+    public static NodoArchivo DeDocumentos()
     {
-        // Si nada cambió, no se rehace (se conservan la selección y el desplazamiento).
-        var listaAbiertos = abiertos.ToList();
-        var listaRecientes = recientes.ToList();
-        bool Igual(string grupo, List<string> rutas) =>
-            Hijos.FirstOrDefault(h => h.Nombre == grupo) is { } g
-                ? g.Hijos.Select(n => n.Ruta).SequenceEqual(rutas, StringComparer.OrdinalIgnoreCase)
-                : rutas.Count == 0;
-        if (Igual("Abiertos", listaAbiertos) && Igual("Recientes", listaRecientes))
-            return;
-        abiertos = listaAbiertos;
-        recientes = listaRecientes;
+        var raiz = Grupo("Documentos", "", null, expandido: true);
+        raiz.Hijos.Add(Grupo("Abiertos", "", raiz, expandido: true));
+        raiz.Hijos.Add(Grupo("Recientes", "", raiz, expandido: true));
+        return raiz;
+    }
 
-        var expandidos = Hijos.Where(h => h.EsGrupo).ToDictionary(h => h.Nombre, h => h.Expandido);
-        Hijos.Clear();
-        void Agregar(string nombre, string icono, IEnumerable<string> rutas)
+    public NodoArchivo Abiertos => Hijos[0];
+    public NodoArchivo Recientes => Hijos[1];
+
+    // Documento recién agregado a un grupo: su fila aparece con animación la primera vez que se muestra.
+    public bool Entrando { get; set; }
+
+    private bool _oculto;
+    public bool Oculto
+    {
+        get => _oculto;
+        set
         {
-            var lista = rutas.ToList();
-            if (lista.Count == 0)
+            if (_oculto == value)
                 return;
-            var grupo = Grupo(nombre, icono, this, expandidos.GetValueOrDefault(nombre, true));
-            foreach (var ruta in lista)
-                grupo.Hijos.Add(new NodoArchivo(ruta, esCarpeta: false, grupo));
-            Hijos.Add(grupo);
+            _oculto = value;
+            Avisar(nameof(Oculto));
         }
-        Agregar("Abiertos", "", abiertos);
-        Agregar("Recientes", "", recientes);
+    }
+
+    // Deja los documentos de un grupo en el orden indicado, moviendo los que ya están (sin rehacerlos) y
+    // agregando los nuevos; los que sobran se quitan. Los nuevos se marcan para entrar con animación.
+    public void OrdenarDocumentos(IReadOnlyList<string> rutas, bool animar)
+    {
+        for (var i = 0; i < rutas.Count; i++)
+        {
+            var existente = Hijos.Skip(i).FirstOrDefault(n => string.Equals(n.Ruta, rutas[i], StringComparison.OrdinalIgnoreCase));
+            if (existente is null)
+                Hijos.Insert(i, new NodoArchivo(rutas[i], esCarpeta: false, this) { Entrando = animar });
+            else if (Hijos.IndexOf(existente) is var j && j != i)
+                Hijos.Move(j, i);
+        }
+        while (Hijos.Count > rutas.Count)
+            Hijos.RemoveAt(Hijos.Count - 1);
+        Oculto = Hijos.Count == 0;
     }
 
     private static NodoArchivo Grupo(string nombre, string icono, NodoArchivo? padre, bool expandido)
@@ -92,7 +103,8 @@ public sealed class NodoArchivo : INotifyPropertyChanged
             _cargado = true,
             _expandido = expandido,
         };
-        grupo.Hijos.Clear(); // sin el marcador "…": su contenido ya viene armado
+        grupo.Hijos.Clear(); // sin el marcador "…": su contenido se llena aparte
+        grupo._oculto = padre is not null; // los grupos parten vacíos
         return grupo;
     }
 

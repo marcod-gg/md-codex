@@ -1271,17 +1271,99 @@ public partial class MainWindow : Window
         LlenarDocumentos();
     }
 
-    // Abiertos: los que no están en un espacio de trabajo (esos se ven en su árbol). Recientes: los que no
-    // están abiertos; al cerrar uno vuelve ahí.
+    // Abiertos: los que no están en un espacio de trabajo (esos se ven en su árbol), el último abierto arriba.
+    // Recientes: los que no están abiertos, el último cerrado arriba.
     private void LlenarDocumentos()
     {
         _documentosDiferidos?.Stop();
-        var abiertas = _pestanas.Where(p => p.Ruta is not null).Select(p => p.Ruta!).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var abiertos = _pestanas.Where(p => p.Ruta is not null && RaizDe(p.Ruta) is null).Select(p => p.Ruta!);
-        _documentos.LlenarDocumentos(abiertos, _recientes.Archivos.Where(r => !abiertas.Contains(r)));
         ArbolDocumentos.ItemsSource ??= _documentos.Hijos;
-        DocumentosVacio.Visibility = Visible(_documentos.Hijos.Count == 0);
-        RevelarActual();
+        var orden = StringComparer.OrdinalIgnoreCase;
+        var abiertas = _pestanas.Where(p => p.Ruta is not null).Select(p => p.Ruta!).ToHashSet(orden);
+        // Los recientes ya están del último abierto al primero; los abiertos que no figuran ahí van al final.
+        var abiertos = _recientes.Archivos.Where(abiertas.Contains)
+            .Concat(abiertas.Except(_recientes.Archivos, orden))
+            .Where(r => RaizDe(r) is null).ToList();
+        var recientes = _recientes.Archivos.Where(r => !abiertas.Contains(r)).ToList();
+        DocumentosVacio.Visibility = Visible(abiertos.Count == 0 && recientes.Count == 0);
+        var cambios = new[] { (Grupo: _documentos.Abiertos, Rutas: abiertos), (Grupo: _documentos.Recientes, Rutas: recientes) }
+            .Where(c => !c.Grupo.Hijos.Select(n => n.Ruta).SequenceEqual(c.Rutas, orden)).ToList();
+        if (cambios.Count == 0)
+        {
+            RevelarActual();
+            return;
+        }
+
+        // Primero sale (desvaneciéndose y plegándose) lo que deja cada grupo; recién después se acomodan los
+        // grupos y lo nuevo entra arriba con animación (Nodo_Loaded). Así un documento que pasa de un grupo
+        // al otro primero desaparece y luego aparece.
+        var animar = IsLoaded && ArbolDocumentos.IsVisible;
+        var salidas = 0;
+        if (animar)
+            foreach (var (grupo, rutas) in cambios)
+            {
+                var contenedor = ArbolDocumentos.ItemContainerGenerator.ContainerFromItem(grupo) as TreeViewItem;
+                foreach (var nodo in grupo.Hijos.Where(n => !rutas.Contains(n.Ruta, orden)))
+                    if (contenedor?.ItemContainerGenerator.ContainerFromItem(nodo) is TreeViewItem fila)
+                    {
+                        AnimarFila(fila, entrar: false);
+                        salidas++;
+                    }
+            }
+
+        void Acomodar()
+        {
+            foreach (var (grupo, rutas) in cambios)
+                grupo.OrdenarDocumentos(rutas, animar);
+            // Al quitar la fila seleccionada, la selección pasa a su grupo: no se deja un encabezado marcado.
+            if (ArbolDocumentos.SelectedItem is NodoArchivo { EsGrupo: true } seleccionado
+                && ArbolDocumentos.ItemContainerGenerator.ContainerFromItem(seleccionado) is TreeViewItem encabezado)
+                encabezado.IsSelected = false;
+            RevelarActual();
+        }
+        if (salidas == 0)
+        {
+            Acomodar();
+            return;
+        }
+        var espera = new DispatcherTimer { Interval = DuracionSalida };
+        espera.Tick += (_, _) =>
+        {
+            espera.Stop();
+            Acomodar();
+        };
+        espera.Start();
+    }
+
+    private static readonly TimeSpan DuracionSalida = TimeSpan.FromMilliseconds(220);
+    private static readonly TimeSpan DuracionEntrada = TimeSpan.FromMilliseconds(280);
+
+    private void Nodo_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is TreeViewItem { DataContext: NodoArchivo { Entrando: true } nodo } fila)
+        {
+            nodo.Entrando = false;
+            AnimarFila(fila, entrar: true);
+        }
+    }
+
+    // La fila se despliega (o se pliega) en altura y aparece (o se desvanece). Al entrar, las animaciones se
+    // retiran al terminar, así la fila vuelve a su estado normal.
+    private static void AnimarFila(TreeViewItem fila, bool entrar)
+    {
+        var escala = new ScaleTransform(1, entrar ? 0 : 1);
+        fila.LayoutTransform = escala;
+        var suave = new CubicEase { EasingMode = entrar ? EasingMode.EaseOut : EasingMode.EaseIn };
+        var duracion = entrar ? DuracionEntrada : DuracionSalida;
+        var altura = new DoubleAnimation(entrar ? 0 : 1, entrar ? 1 : 0, duracion) { EasingFunction = suave };
+        var opacidad = new DoubleAnimation(entrar ? 0 : 1, entrar ? 1 : 0, entrar ? duracion * 1.4 : duracion);
+        if (entrar)
+            opacidad.Completed += (_, _) =>
+            {
+                fila.BeginAnimation(OpacityProperty, null);
+                fila.LayoutTransform = Transform.Identity;
+            };
+        escala.BeginAnimation(ScaleTransform.ScaleYProperty, altura);
+        fila.BeginAnimation(OpacityProperty, opacidad);
     }
 
     // Rearma el árbol (espacios, y debajo sus carpetas) conservando lo expandido; las carpetas recién
