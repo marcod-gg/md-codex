@@ -4,7 +4,20 @@ using System.Text.Json;
 namespace MdCodex;
 
 // Lo que quedó abierto al cerrar, para reabrirlo al iniciar sin archivos (como VS Code).
+// Carpeta es de las versiones sin espacios de trabajo: solo se lee para crear el primero.
 public sealed record Sesion(string? Carpeta, List<string> Archivos, string? Activo, string Modo);
+
+// Espacio de trabajo: un nombre y las carpetas (de cualquier lugar) que se ven juntas en el panel.
+public sealed class EspacioTrabajo
+{
+    public string Nombre { get; set; } = "";
+    public List<string> Carpetas { get; set; } = [];
+    public bool Expandido { get; set; } = true;
+    // Glifo de Segoe Fluent Icons; por omisión, el de biblioteca.
+    public string Icono { get; set; } = IconoPorDefecto;
+
+    public const string IconoPorDefecto = "";
+}
 
 // Archivos y carpetas recientes, y la última sesión. Se guardan en %LOCALAPPDATA%\MdCodex\recientes.json.
 public sealed class Recientes
@@ -21,6 +34,15 @@ public sealed class Recientes
     public Sesion? UltimaSesion { get; set; }
     // Preferencia de la barra lateral: fija (siempre abierta) o automática (se despliega al tocar un ícono).
     public bool LateralFijo { get; set; } = true;
+    // En el orden en que se muestran (se reordenan arrastrándolos).
+    public List<EspacioTrabajo> Espacios { get; set; } = [];
+
+    // Siempre hay al menos un espacio de trabajo; el primero hereda la carpeta de la última sesión.
+    public void AsegurarEspacio()
+    {
+        if (Espacios.Count == 0)
+            Espacios.Add(new EspacioTrabajo { Nombre = "Principal", Carpetas = UltimaSesion?.Carpeta is { } carpeta ? [carpeta] : [] });
+    }
 
     // Un archivo dañado o ilegible no impide abrir la app: se empieza sin recientes.
     public static Recientes Cargar()

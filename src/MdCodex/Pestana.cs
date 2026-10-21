@@ -109,6 +109,9 @@ public sealed class Pestana : INotifyPropertyChanged, IDisposable
             AsignarRuta(Path.GetFullPath(ruta));
     }
 
+    // El archivo se movió en el disco: la pestaña pasa a vigilar la nueva ruta.
+    public void Mover(string ruta) => AsignarRuta(Path.GetFullPath(ruta));
+
     public void Recargar(string texto)
     {
         Documento.Text = texto;

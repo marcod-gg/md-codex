@@ -4,7 +4,8 @@ using System.IO;
 
 namespace MdCodex;
 
-// Elemento del árbol del Explorador. Las carpetas cargan su contenido al expandirse por primera vez.
+// Elemento del árbol de espacios de trabajo: un espacio (primer nivel), una de sus carpetas, o lo que
+// hay dentro. Las carpetas cargan su contenido al expandirse por primera vez.
 public sealed class NodoArchivo : INotifyPropertyChanged
 {
     private static readonly HashSet<string> Ignoradas = new(StringComparer.OrdinalIgnoreCase)
@@ -14,22 +15,50 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     private bool _cargado;
     private bool _esActual;
 
-    private NodoArchivo(string ruta, bool esCarpeta)
+    private NodoArchivo(string ruta, bool esCarpeta, NodoArchivo? padre)
     {
         Ruta = ruta;
         Nombre = Path.GetFileName(ruta);
         EsCarpeta = esCarpeta;
+        Padre = padre;
         if (esCarpeta)
-            Hijos.Add(new NodoArchivo("…", esCarpeta: false)); // marcador para que se vea la flecha de expandir
+            Hijos.Add(new NodoArchivo("…", esCarpeta: false, this)); // marcador para que se vea la flecha de expandir
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    // En un espacio de trabajo, su nombre.
     public string Ruta { get; }
-    public string Nombre { get; }
+    public string Nombre { get; private init; }
     public bool EsCarpeta { get; }
+    public NodoArchivo? Padre { get; }
+    // Carpeta de un espacio de trabajo, en el segundo nivel del árbol.
+    public bool EsRaiz { get; private init; }
+    // Solo en los nodos de primer nivel.
+    public EspacioTrabajo? Espacio { get; private init; }
+    public bool EsEspacio => Espacio is not null;
+    // El espacio de trabajo al que pertenece el nodo (una misma carpeta puede estar en varios).
+    public EspacioTrabajo EspacioDe => Espacio ?? Padre!.EspacioDe;
+
+    public static NodoArchivo DeEspacio(EspacioTrabajo espacio)
+    {
+        var nodo = new NodoArchivo(espacio.Nombre, esCarpeta: false, null)
+        {
+            Espacio = espacio,
+            Nombre = espacio.Nombre,
+            _cargado = true,
+            _expandido = espacio.Expandido,
+        };
+        foreach (var carpeta in espacio.Carpetas)
+            nodo.Hijos.Add(new NodoArchivo(carpeta, esCarpeta: true, nodo) { EsRaiz = true, Nombre = NombreDeCarpeta(carpeta) });
+        return nodo;
+    }
+
+    // La raíz de una unidad (p. ej. "D:\") no tiene nombre de carpeta: se muestra la ruta.
+    public static string NombreDeCarpeta(string carpeta) => Path.GetFileName(carpeta) is { Length: > 0 } nombre ? nombre : carpeta;
+
     public ObservableCollection<NodoArchivo> Hijos { get; } = [];
-    public string Icono => EsCarpeta ? (Expandido ? "" : "") : "";
+    public string Icono => Espacio is not null ? Espacio.Icono :EsCarpeta ? (Expandido ? "\uE838" : "\uE8B7") : "\uE8A5";
 
     public bool Expandido
     {
@@ -39,11 +68,14 @@ public sealed class NodoArchivo : INotifyPropertyChanged
             if (_expandido == value)
                 return;
             _expandido = value;
+            // Lo expandido de cada espacio se recuerda entre sesiones.
+            if (Espacio is not null)
+                Espacio.Expandido = value;
             if (value && !_cargado)
             {
                 _cargado = true;
                 Hijos.Clear();
-                foreach (var hijo in Listar(Ruta))
+                foreach (var hijo in Listar(Ruta, this))
                     Hijos.Add(hijo);
             }
             Avisar(nameof(Expandido));
@@ -63,18 +95,18 @@ public sealed class NodoArchivo : INotifyPropertyChanged
         }
     }
 
-    public static ObservableCollection<NodoArchivo> Listar(string carpeta)
+    private static List<NodoArchivo> Listar(string carpeta, NodoArchivo padre)
     {
-        var nodos = new ObservableCollection<NodoArchivo>();
+        var nodos = new List<NodoArchivo>();
         try
         {
             var info = new DirectoryInfo(carpeta);
             foreach (var sub in info.EnumerateDirectories().OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase))
                 if (!sub.Attributes.HasFlag(FileAttributes.Hidden) && !Ignoradas.Contains(sub.Name))
-                    nodos.Add(new NodoArchivo(sub.FullName, esCarpeta: true));
+                    nodos.Add(new NodoArchivo(sub.FullName, esCarpeta: true, padre));
             foreach (var archivo in info.EnumerateFiles().OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase))
                 if (Documentos.EsMarkdown(archivo.Name))
-                    nodos.Add(new NodoArchivo(archivo.FullName, esCarpeta: false));
+                    nodos.Add(new NodoArchivo(archivo.FullName, esCarpeta: false, padre));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -84,13 +116,14 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     }
 
     // Expande las carpetas que llevan hasta la ruta y marca el archivo como actual.
+    // Los espacios de trabajo no se expanden solos: se respeta si el usuario los plegó.
     public static void Revelar(IEnumerable<NodoArchivo> nodos, string? ruta)
     {
         foreach (var nodo in nodos)
         {
             if (ruta is not null && nodo.EsCarpeta && ruta.StartsWith(nodo.Ruta + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 nodo.Expandido = true;
-            nodo.EsActual = !nodo.EsCarpeta && string.Equals(nodo.Ruta, ruta, StringComparison.OrdinalIgnoreCase);
+            nodo.EsActual = !nodo.EsCarpeta && !nodo.EsEspacio && string.Equals(nodo.Ruta, ruta, StringComparison.OrdinalIgnoreCase);
             if (nodo._cargado)
                 Revelar(nodo.Hijos, ruta);
         }

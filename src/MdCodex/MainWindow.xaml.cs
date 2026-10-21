@@ -34,14 +34,25 @@ public partial class MainWindow : Window
     // Host virtual de cada carpeta de documento → carpeta en disco, para servir sus imágenes.
     private readonly Dictionary<string, string> _carpetasPorHost = new(StringComparer.OrdinalIgnoreCase);
     private Pestana? _activa;
-    private string? _carpetaRaiz;
+    // Carpetas de todos los espacios de trabajo.
+    private IEnumerable<string> _carpetas => _recientes.Espacios.SelectMany(e => e.Carpetas);
+    // Nodo sobre el que se abrió el menú contextual del árbol (null: espacio vacío del panel).
+    private NodoArchivo? _nodoMenu;
+    // Arrastre en el árbol (un espacio de trabajo o un archivo): dónde empezó y qué nodo.
+    private Point _inicioArrastre;
+    private NodoArchivo? _nodoArrastrado;
+    // Qué hacer con el nombre escrito en la fila de nombre (archivo nuevo, espacio nuevo o renombrado).
+    private Action<string>? _alAceptarNombre;
     private Modo _modo = Modo.Vista;
     private Panel _panel = Panel.Explorador;
     // Con la barra lateral automática, si está desplegada sobre el área de trabajo.
     private bool _lateralDesplegado;
     // Si la barra lateral se muestra (o está apareciendo); al desvanecerse sigue visible un momento.
     private bool _lateralMostrado = true;
-    private double _anchoLateral = 260;
+    // Página de la release más nueva, si hay una actualización pendiente.
+    private string? _urlActualizacion;
+    private double _anchoLateral = 280;
+    private const double AnchoMinimoLateral = 240;
     private IReadOnlyList<Titulo> _titulos = [];
     private bool _vistaLista;
     private Task? _inicioVisor;
@@ -58,6 +69,7 @@ public partial class MainWindow : Window
 
     public MainWindow(IReadOnlyList<string> archivosIniciales)
     {
+        _recientes.AsegurarEspacio();
         InitializeComponent();
 
         BarraPestanas.ItemsSource = _pestanas;
@@ -88,6 +100,7 @@ public partial class MainWindow : Window
         SystemEvents.UserPreferenceChanged += AlCambiarPreferencias;
 
         AplicarModo(Modo.Vista);
+        RefrescarArbol();
         AplicarLateral();
         Activar(null);
 
@@ -105,10 +118,14 @@ public partial class MainWindow : Window
                 RestaurarSesion();
             }
 
-            if (await Marca.BuscarActualizacionAsync() is { } nueva &&
-                MessageBox.Show(this, $"Hay una nueva versión de MD Codex ({nueva.Version}). ¿Quieres descargarla?",
-                    "MD Codex", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
-                Marca.Abrir(nueva.Url);
+            if (await Marca.BuscarActualizacionAsync() is { } nueva)
+            {
+                _urlActualizacion = nueva.Url;
+                TextoActualizacion.Text = $"MD Codex {nueva.Version} está disponible.";
+                EstadoActualizacion.ToolTip = $"MD Codex {nueva.Version} está disponible. Clic para descargarla.";
+                AvisoActualizacion.Visibility = Visibility.Visible;
+                EstadoActualizacion.Visibility = Visibility.Visible;
+            }
         };
     }
 
@@ -125,8 +142,6 @@ public partial class MainWindow : Window
         _restaurando = true;
         try
         {
-            if (sesion.Carpeta is { } carpeta && Directory.Exists(carpeta))
-                AbrirCarpeta(carpeta);
             foreach (var archivo in sesion.Archivos.Where(File.Exists))
                 AbrirArchivo(archivo);
             if (_pestanas.FirstOrDefault(p => string.Equals(p.Ruta, sesion.Activo, StringComparison.OrdinalIgnoreCase)) is { } activa)
@@ -144,7 +159,7 @@ public partial class MainWindow : Window
     {
         // Los documentos sin título no tienen dónde reabrirse.
         _recientes.UltimaSesion = new Sesion(
-            _carpetaRaiz,
+            null,
             _pestanas.Where(p => p.Ruta is not null).Select(p => p.Ruta!).ToList(),
             _activa?.Ruta,
             _modo.ToString());
@@ -311,14 +326,14 @@ public partial class MainWindow : Window
 
     private sealed record Ubicacion(string Host, string Raiz, string Base);
 
-    // La raíz virtual de un documento es la carpeta abierta en el Explorador si el documento está dentro
-    // de ella, o su propia carpeta si no. La URL base incluye la ruta del documento bajo esa raíz, así
+    // La raíz virtual de un documento es la carpeta abierta en el Explorador que lo contiene, o su
+    // propia carpeta si no está en ninguna. La URL base incluye la ruta del documento bajo esa raíz, así
     // funcionan rutas como ../img/x.png sin dar acceso a nada fuera de la raíz.
     private Ubicacion? Ubicar(Pestana p)
     {
         if (p.Carpeta is not { } carpeta)
             return null;
-        var raiz = _carpetaRaiz is not null && Documentos.EstaDentro(carpeta, _carpetaRaiz) ? _carpetaRaiz : carpeta;
+        var raiz = RaizDe(carpeta) ?? carpeta;
         var relativa = Path.GetRelativePath(raiz, carpeta);
         var camino = relativa == "." ? "" : string.Join('/', relativa.Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString)) + "/";
         var host = Documentos.HostPara(raiz);
@@ -684,9 +699,6 @@ public partial class MainWindow : Window
         Agregar(nueva, reemplazable);
         RegistrarArchivoReciente(completa);
 
-        // Como VS Code: si el archivo está fuera de la carpeta abierta, se abre su carpeta.
-        if (_carpetaRaiz is null || !completa.StartsWith(_carpetaRaiz + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            AbrirCarpeta(nueva.Carpeta!);
     }
 
     private void Agregar(Pestana nueva, Pestana? reemplazar = null)
@@ -798,7 +810,7 @@ public partial class MainWindow : Window
             DefaultExt = ".md",
             FileName = p.Ruta is null ? $"{p.Nombre}.md" : p.Nombre,
         };
-        if ((p.Carpeta ?? _carpetaRaiz) is { } carpetaInicial)
+        if ((p.Carpeta ?? _carpetas.FirstOrDefault()) is { } carpetaInicial)
             dialogo.InitialDirectory = carpetaInicial;
 
         if (dialogo.ShowDialog(this) != true || !Escribir(p, dialogo.FileName))
@@ -884,32 +896,284 @@ public partial class MainWindow : Window
             CargarEnPro();
     }
 
-    // ---------- Explorador ----------
+    // ---------- Espacios de trabajo ----------
 
-    private void AbrirCarpeta(string carpeta)
+    // Agrega la carpeta a un espacio de trabajo (por omisión, el de lo seleccionado en el árbol).
+    private void AbrirCarpeta(string carpeta, EspacioTrabajo? espacio = null)
     {
-        _carpetaRaiz = Path.TrimEndingDirectorySeparator(Path.GetFullPath(carpeta));
-        var nombre = Path.GetFileName(_carpetaRaiz);
-        if (nombre.Length == 0)
-            nombre = _carpetaRaiz; // raíz de una unidad, p. ej. "D:\"
-        NombreCarpeta.Text = nombre.ToUpperInvariant();
-        NombreCarpeta.ToolTip = _carpetaRaiz;
-        EstadoCarpeta.Text = nombre;
-        Arbol.ItemsSource = NodoArchivo.Listar(_carpetaRaiz);
-        RevelarActual();
+        espacio ??= EspacioDe(Arbol.SelectedItem as NodoArchivo);
+        carpeta = Path.TrimEndingDirectorySeparator(Path.GetFullPath(carpeta));
+        if (!espacio.Carpetas.Contains(carpeta, StringComparer.OrdinalIgnoreCase))
+        {
+            espacio.Carpetas.Add(carpeta);
+            espacio.Expandido = true;
+            _recientes.Guardar();
+        }
+        RefrescarArbol();
         AplicarLateral();
     }
 
+    private void AgregarCarpetas(EspacioTrabajo espacio)
+    {
+        var dialogo = new OpenFolderDialog { Title = $"Agregar carpetas a \"{espacio.Nombre}\"", Multiselect = true };
+        if ((espacio.Carpetas.FirstOrDefault() ?? _carpetas.FirstOrDefault()) is { } carpetaInicial)
+            dialogo.InitialDirectory = carpetaInicial;
+        if (dialogo.ShowDialog(this) != true)
+            return;
+        foreach (var carpeta in dialogo.FolderNames)
+        {
+            AbrirCarpeta(carpeta, espacio);
+            RegistrarCarpetaReciente(carpeta);
+        }
+        MostrarPanel(Panel.Explorador);
+    }
+
+    private EspacioTrabajo EspacioDe(NodoArchivo? nodo) => nodo?.EspacioDe ?? _recientes.Espacios[0];
+
+    // Desde el menú contextual del árbol, el nodo donde se abrió; desde un botón, lo seleccionado.
+    private NodoArchivo? NodoDe(object sender) => sender is MenuItem ? _nodoMenu : Arbol.SelectedItem as NodoArchivo;
+
+    private bool NombreLibre(string nombre, EspacioTrabajo? salvo = null)
+    {
+        if (!_recientes.Espacios.Any(e => e != salvo && string.Equals(e.Nombre, nombre, StringComparison.CurrentCultureIgnoreCase)))
+            return true;
+        Avisar($"Ya hay un espacio de trabajo llamado \"{nombre}\".");
+        return false;
+    }
+
+    private void NuevoEspacio_Click(object sender, RoutedEventArgs e) =>
+        PedirNombre(null, "Nombre del espacio de trabajo", "", nombre =>
+        {
+            if (!NombreLibre(nombre))
+                return;
+            // Los nuevos quedan arriba; luego se reordenan arrastrándolos.
+            _recientes.Espacios.Insert(0, new EspacioTrabajo { Nombre = nombre, Icono = _iconoElegido! });
+            _recientes.Guardar();
+            RefrescarArbol();
+        }, icono: EspacioTrabajo.IconoPorDefecto);
+
+    private void RenombrarEspacio_Click(object sender, RoutedEventArgs e)
+    {
+        var espacio = EspacioDe(NodoDe(sender));
+        PedirNombre(null, "Nombre del espacio de trabajo", espacio.Nombre, nombre =>
+        {
+            if (!NombreLibre(nombre, espacio))
+                return;
+            espacio.Nombre = nombre;
+            espacio.Icono = _iconoElegido!;
+            _recientes.Guardar();
+            RefrescarArbol();
+        }, icono: espacio.Icono);
+    }
+
+    // Solo quita el espacio de la lista: las carpetas y sus archivos no se tocan.
+    private void EliminarEspacio_Click(object sender, RoutedEventArgs e)
+    {
+        var espacio = EspacioDe(NodoDe(sender));
+        if (_recientes.Espacios.Count <= 1 || MessageBox.Show(this,
+                $"¿Quieres eliminar el espacio de trabajo \"{espacio.Nombre}\"? Las carpetas y sus archivos no se borran.",
+                "MD Codex", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        _recientes.Espacios.Remove(espacio);
+        _recientes.Guardar();
+        RefrescarArbol();
+    }
+
+    private void AgregarCarpeta_Click(object sender, RoutedEventArgs e) => AgregarCarpetas(EspacioDe(NodoDe(sender)));
+
+    // Quita del espacio la carpeta que contiene el nodo; no borra nada del disco.
+    private void QuitarCarpeta_Click(object sender, RoutedEventArgs e)
+    {
+        var nodo = NodoDe(sender);
+        while (nodo is { EsRaiz: false })
+            nodo = nodo.Padre;
+        if (nodo is null)
+            return;
+        nodo.EspacioDe.Carpetas.RemoveAll(c => string.Equals(c, nodo.Ruta, StringComparison.OrdinalIgnoreCase));
+        _recientes.Guardar();
+        RefrescarArbol();
+        AplicarLateral();
+    }
+
+    // ---------- Fila de nombre ----------
+
+    // Íconos que se pueden elegir para un espacio de trabajo (Segoe Fluent Icons); el primero es el de omisión.
+    private static readonly string[] IconosEspacio =
+    [
+        EspacioTrabajo.IconoPorDefecto, "", "", "", "", "", "", "",
+        "", "", "", "", "", "", "", "",
+    ];
+
+    // Ícono marcado en la fila de nombre, al pedir el de un espacio de trabajo.
+    private string? _iconoElegido;
+
+    // Con un espacio de trabajo, un clic fuera también acepta lo escrito; con un archivo, cancela.
+    private bool _aceptarAlSalir;
+
+    // Pide un nombre en una fila del panel: Enter acepta, Esc cancela. La etiqueta es opcional; el
+    // marcador se ve mientras la caja está vacía. Con un ícono (espacio de trabajo), a la izquierda
+    // va el botón para elegirlo.
+    private void PedirNombre(string? etiqueta, string marcador, string inicial, Action<string> aceptar, string? detalle = null, string? icono = null)
+    {
+        _alAceptarNombre = aceptar;
+        _aceptarAlSalir = icono is not null;
+        EtiquetaNombre.Text = etiqueta;
+        EtiquetaNombre.ToolTip = detalle;
+        EtiquetaNombre.Visibility = Visible(etiqueta is not null);
+        MarcadorNombre.Text = marcador;
+        CajaNombre.Text = inicial;
+
+        _iconoElegido = icono;
+        BotonElegirIcono.Content = icono;
+        BotonElegirIcono.Visibility = Visible(icono is not null);
+        SelectorIconos.IsOpen = false;
+        if (icono is not null)
+        {
+            if (PanelIconos.Children.Count == 0)
+                foreach (var glifo in IconosEspacio)
+                {
+                    var boton = new RadioButton { Content = glifo, Tag = glifo, GroupName = "IconoEspacio", Style = (Style)FindResource("AlternarIcono") };
+                    boton.Click += (_, _) =>
+                    {
+                        _iconoElegido = glifo;
+                        BotonElegirIcono.Content = glifo;
+                        SelectorIconos.IsOpen = false;
+                    };
+                    PanelIconos.Children.Add(boton);
+                }
+            foreach (RadioButton boton in PanelIconos.Children)
+                boton.IsChecked = (string)boton.Tag == icono;
+        }
+
+        FilaNombre.Visibility = Visibility.Visible;
+        var aparicion = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        EscalaFilaNombre.BeginAnimation(ScaleTransform.ScaleYProperty, aparicion);
+        FilaNombre.BeginAnimation(OpacityProperty, aparicion);
+        // Recién mostrada aún no puede recibir el foco: se espera al siguiente pase de diseño.
+        Dispatcher.BeginInvoke(() =>
+        {
+            CajaNombre.Focus();
+            CajaNombre.SelectAll();
+        }, DispatcherPriority.Input);
+    }
+
+    private void OcultarNombre()
+    {
+        _alAceptarNombre = null;
+        FilaNombre.Visibility = Visibility.Collapsed;
+    }
+
+    private void AceptarNombre()
+    {
+        var aceptar = _alAceptarNombre;
+        var nombre = CajaNombre.Text.Trim();
+        OcultarNombre();
+        if (nombre.Length > 0)
+            aceptar?.Invoke(nombre);
+    }
+
+    private void CajaNombre_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            AceptarNombre();
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            OcultarNombre();
+        }
+    }
+
+    // Tras Enter o Esc ya no hay nada pendiente. Aceptar va diferido: un aviso (nombre repetido) no
+    // debe abrirse en pleno cambio de foco.
+    private void CajaNombre_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_alAceptarNombre is null)
+            return;
+        if (_aceptarAlSalir)
+            Dispatcher.BeginInvoke(AceptarNombre);
+        else
+            OcultarNombre();
+    }
+
+    // Si ya estaba abierto, el clic en el botón lo cerró antes de llegar aquí (StaysOpen="False").
+    private void BotonElegirIcono_Click(object sender, RoutedEventArgs e) => SelectorIconos.IsOpen = true;
+
+    private string? RaizDe(string ruta) => _carpetas.FirstOrDefault(c => Documentos.EstaDentro(ruta, c));
+
+    // Rearma el árbol (espacios, y debajo sus carpetas) conservando lo expandido; las carpetas recién
+    // agregadas se abren.
     private void RefrescarArbol()
     {
-        if (_carpetaRaiz is null || Arbol.ItemsSource is not IEnumerable<NodoArchivo> actuales)
-            return;
-
+        var actuales = Arbol.ItemsSource as IEnumerable<NodoArchivo> ?? [];
         var expandidas = NodoArchivo.Expandidas(actuales);
-        var nuevos = NodoArchivo.Listar(_carpetaRaiz);
-        NodoArchivo.Expandir(nuevos, expandidas);
-        Arbol.ItemsSource = nuevos;
+        expandidas.UnionWith(_carpetas.Except(actuales.SelectMany(n => n.Hijos).Select(n => n.Ruta), StringComparer.OrdinalIgnoreCase));
+
+        var espacios = _recientes.Espacios.Select(NodoArchivo.DeEspacio).ToList();
+        foreach (var espacio in espacios)
+            NodoArchivo.Expandir(espacio.Hijos, expandidas);
+        Arbol.ItemsSource = espacios;
         RevelarActual();
+
+        var carpetas = _carpetas.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        EstadoCarpeta.Text = carpetas.Count switch
+        {
+            0 => "Sin carpeta",
+            1 => NodoArchivo.NombreDeCarpeta(carpetas[0]),
+            _ => $"{carpetas.Count} carpetas",
+        };
+    }
+
+    // Carpeta donde crear un archivo según el nodo: la carpeta misma, la del archivo, o la primera del
+    // espacio. Sin nodo, la del documento activo si está en algún espacio, o la primera carpeta.
+    private string? CarpetaDestino(NodoArchivo? nodo) => nodo switch
+    {
+        { Espacio: { } espacio } => espacio.Carpetas.FirstOrDefault(),
+        { EsCarpeta: true } => nodo.Ruta,
+        { } => Path.GetDirectoryName(nodo.Ruta),
+        null => _activa?.Carpeta is { } activa && RaizDe(activa) is not null ? activa : _carpetas.FirstOrDefault(),
+    };
+
+    private void NuevoArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        if (CarpetaDestino(NodoDe(sender)) is not { } destino)
+            return;
+        var raiz = RaizDe(destino);
+        var donde = raiz is null
+            ? destino
+            : Path.Combine(NodoArchivo.NombreDeCarpeta(raiz), Path.GetRelativePath(raiz, destino)).TrimEnd('.', Path.DirectorySeparatorChar);
+        PedirNombre($"Nuevo archivo en {donde}", "nombre.md", "", nombre => CrearArchivo(destino, nombre), destino);
+    }
+
+    // Crea el archivo vacío (".md" si no se escribe extensión) y lo abre.
+    private void CrearArchivo(string destino, string nombre)
+    {
+        if (nombre.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            Avisar("El nombre no puede contener ninguno de estos caracteres: \\ / : * ? \" < > |");
+            return;
+        }
+        if (!Path.HasExtension(nombre))
+            nombre += ".md";
+
+        var ruta = Path.Combine(destino, nombre);
+        try
+        {
+            // CreateNew falla si ya existe: nunca se pisa un archivo.
+            using (new FileStream(ruta, FileMode.CreateNew)) { }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Avisar(File.Exists(ruta) ? $"Ya existe un archivo con ese nombre:\n{ruta}" : $"No se pudo crear el archivo:\n{ex.Message}");
+            return;
+        }
+        RefrescarArbol();
+        AbrirArchivo(ruta);
     }
 
     private void RevelarActual()
@@ -936,6 +1200,8 @@ public partial class MainWindow : Window
             _anchoLateral = ColumnaLateral.ActualWidth;
 
         ColumnaLateral.Width = new GridLength(fija ? _anchoLateral : 0);
+        // Mínimo para que el título y los botones del encabezado no se monten.
+        ColumnaLateral.MinWidth = fija ? AnchoMinimoLateral : 0;
         Grid.SetColumnSpan(Lateral, fija ? 1 : 3);
         Lateral.Width = fija ? double.NaN : _anchoLateral;
         Lateral.HorizontalAlignment = fija ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
@@ -950,10 +1216,9 @@ public partial class MainWindow : Window
         ActividadEsquema.IsChecked = visible && _panel == Panel.Esquema;
 
         var explorador = _panel == Panel.Explorador;
-        TituloLateral.Text = explorador ? "EXPLORADOR" : "ESQUEMA";
+        TituloLateral.Text = explorador ? "ESPACIOS DE TRABAJO" : "ESQUEMA";
         AccionesExplorador.Visibility = Visible(explorador);
-        PanelExplorador.Visibility = Visible(explorador && _carpetaRaiz is not null);
-        ExploradorVacio.Visibility = Visible(explorador && _carpetaRaiz is null);
+        PanelExplorador.Visibility = Visible(explorador);
         ListaEsquema.Visibility = Visible(!explorador && _titulos.Count > 0);
         EsquemaVacio.Visibility = Visible(!explorador && _titulos.Count == 0);
         EsquemaVacio.Text = _activa is null ? "No hay ningún documento abierto." : "El documento no tiene títulos.";
@@ -1401,7 +1666,7 @@ public partial class MainWindow : Window
         if (Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is not NodoArchivo nodo)
             return;
 
-        if (nodo.EsCarpeta)
+        if (nodo.EsCarpeta || nodo.EsEspacio)
             nodo.Expandido = !nodo.Expandido;
         else
             AbrirArchivo(nodo.Ruta, temporal: true);
@@ -1410,13 +1675,13 @@ public partial class MainWindow : Window
     // Doble clic en el Explorador fija la pestaña temporal.
     private void Arbol_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is NodoArchivo { EsCarpeta: false } nodo)
+        if (Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is NodoArchivo { EsCarpeta: false, EsEspacio: false } nodo)
             AbrirArchivo(nodo.Ruta);
     }
 
     private void Arbol_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && Arbol.SelectedItem is NodoArchivo { EsCarpeta: false } nodo)
+        if (e.Key == Key.Enter && Arbol.SelectedItem is NodoArchivo { EsCarpeta: false, EsEspacio: false } nodo)
         {
             e.Handled = true;
             AbrirArchivo(nodo.Ruta);
@@ -1508,7 +1773,7 @@ public partial class MainWindow : Window
             Filter = "Markdown (*.md;*.markdown)|*.md;*.markdown;*.mdown;*.mkd|Texto (*.txt)|*.txt|Todos los archivos (*.*)|*.*",
             Multiselect = true,
         };
-        if ((_activa?.Carpeta ?? _carpetaRaiz) is { } carpetaInicial)
+        if ((_activa?.Carpeta ?? _carpetas.FirstOrDefault()) is { } carpetaInicial)
             dialogo.InitialDirectory = carpetaInicial;
 
         if (dialogo.ShowDialog(this) == true)
@@ -1518,16 +1783,174 @@ public partial class MainWindow : Window
 
     private void AbrirCarpeta_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        var dialogo = new OpenFolderDialog { Title = "Abrir carpeta" };
-        if (_carpetaRaiz is not null)
-            dialogo.InitialDirectory = _carpetaRaiz;
+        AgregarCarpetas(EspacioDe(Arbol.SelectedItem as NodoArchivo));
+    }
 
-        if (dialogo.ShowDialog(this) == true)
+    // El clic derecho también selecciona el elemento; el menú actúa sobre él (o, en un hueco, sin nodo).
+    private void Arbol_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var item = Ancestro<TreeViewItem>(e.OriginalSource);
+        _nodoMenu = item?.DataContext as NodoArchivo;
+        if (item is not null)
+            item.IsSelected = true;
+    }
+
+    private void Arbol_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        MenuNuevoArchivoArbol.IsEnabled = CarpetaDestino(_nodoMenu) is not null;
+        MenuQuitarCarpeta.IsEnabled = _nodoMenu is { EsEspacio: false };
+        MenuRenombrarEspacio.IsEnabled = _nodoMenu is not null;
+        MenuEliminarEspacio.IsEnabled = _nodoMenu is not null && _recientes.Espacios.Count > 1;
+    }
+
+    private void Arbol_Expandido(object sender, RoutedEventArgs e) => AnimarHijos(e.OriginalSource, expandir: true);
+
+    private void Arbol_Plegado(object sender, RoutedEventArgs e) => AnimarHijos(e.OriginalSource, expandir: false);
+
+    // Los hijos se descubren o se recogen animando la altura (recortada, sin deformar el texto): empieza
+    // rápido y termina lento. La opacidad va más pausada, así los elementos aparecen y se van
+    // desvanecidos. Solo con el elemento ya cargado: al rearmar el árbol, lo expandido aparece tal cual.
+    // Las animaciones terminan en Stop: al acabar manda de nuevo la plantilla (altura automática, y
+    // los hijos visibles u ocultos según IsExpanded).
+    private static void AnimarHijos(object origen, bool expandir)
+    {
+        if (origen is not TreeViewItem { IsLoaded: true } item || item.Template.FindName("Hijos", item) is not ItemsPresenter hijos)
+            return;
+        var suave = new CubicEase { EasingMode = EasingMode.EaseOut };
+        // Se lee antes de animar nada: iniciar una animación puede recalcular el diseño, y la plantilla
+        // ya los da por ocultos (altura 0).
+        var alto = hijos.ActualHeight;
+
+        if (!expandir)
         {
-            AbrirCarpeta(dialogo.FolderName);
-            RegistrarCarpetaReciente(dialogo.FolderName);
-            MostrarPanel(Panel.Explorador);
+            var plegado = TimeSpan.FromMilliseconds(220);
+            // La plantilla los oculta al instante: se mantienen visibles mientras dura la animación.
+            var mantener = new ObjectAnimationUsingKeyFrames { Duration = plegado, FillBehavior = FillBehavior.Stop };
+            mantener.KeyFrames.Add(new DiscreteObjectKeyFrame(Visibility.Visible, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            hijos.BeginAnimation(VisibilityProperty, mantener);
+            hijos.BeginAnimation(HeightProperty, new DoubleAnimation(alto, 0, plegado) { EasingFunction = suave, FillBehavior = FillBehavior.Stop });
+            hijos.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, plegado) { EasingFunction = suave, FillBehavior = FillBehavior.Stop });
+            return;
         }
+
+        // Hasta medir la altura final (los hijos recién cargados aún no tienen contenedores), se dejan
+        // en cero y transparentes para que no asomen un instante.
+        // Con origen explícito: sin él, se partiría de la altura automática (NaN) y WPF lanza una excepción.
+        hijos.BeginAnimation(HeightProperty, new DoubleAnimation(0, 0, TimeSpan.Zero));
+        hijos.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 0, TimeSpan.Zero));
+        hijos.Dispatcher.BeginInvoke(() =>
+        {
+            if (VisualTreeHelper.GetChildrenCount(hijos) == 0 || VisualTreeHelper.GetChild(hijos, 0) is not UIElement panel)
+            {
+                // Sin panel que medir, sin animación: se quita lo que los dejaba en cero.
+                hijos.BeginAnimation(HeightProperty, null);
+                hijos.BeginAnimation(OpacityProperty, null);
+                return;
+            }
+            panel.Measure(new Size(hijos.ActualWidth, double.PositiveInfinity));
+            hijos.BeginAnimation(HeightProperty, new DoubleAnimation(0, panel.DesiredSize.Height, TimeSpan.FromMilliseconds(260))
+            {
+                EasingFunction = suave,
+                FillBehavior = FillBehavior.Stop,
+            });
+            hijos.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(360))
+            {
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                FillBehavior = FillBehavior.Stop,
+            });
+        }, DispatcherPriority.Loaded);
+    }
+
+    // Se arrastra la fila (no la flecha) de un espacio de trabajo, para reordenarlo, o de un archivo,
+    // para moverlo a otra carpeta.
+    private void Arbol_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _inicioArrastre = e.GetPosition(Arbol);
+        _nodoArrastrado = Ancestro<ToggleButton>(e.OriginalSource) is null
+            && Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is NodoArchivo nodo && (nodo.EsEspacio || !nodo.EsCarpeta)
+            ? nodo : null;
+    }
+
+    private void Arbol_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_nodoArrastrado is not { } nodo || e.LeftButton != MouseButtonState.Pressed)
+            return;
+        var distancia = e.GetPosition(Arbol) - _inicioArrastre;
+        if (Math.Abs(distancia.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(distancia.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+        _nodoArrastrado = null;
+        var datos = nodo.Espacio is { } espacio ? new DataObject(typeof(EspacioTrabajo), espacio) : new DataObject(typeof(NodoArchivo), nodo);
+        DragDrop.DoDragDrop(Arbol, datos, DragDropEffects.Move);
+    }
+
+    // Carpeta donde caería un archivo soltado sobre esa fila: la carpeta misma o la del archivo.
+    private static string? CarpetaBajo(DragEventArgs e) => Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext switch
+    {
+        NodoArchivo { EsEspacio: true } or null => null,
+        NodoArchivo { EsCarpeta: true } carpeta => carpeta.Ruta,
+        NodoArchivo archivo => Path.GetDirectoryName(archivo.Ruta),
+        _ => null,
+    };
+
+    private void Arbol_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(typeof(NodoArchivo)) is NodoArchivo archivo)
+            e.Effects = CarpetaBajo(e) is { } carpeta && !string.Equals(carpeta, Path.GetDirectoryName(archivo.Ruta), StringComparison.OrdinalIgnoreCase)
+                ? DragDropEffects.Move : DragDropEffects.None;
+        else if (e.Data.GetDataPresent(typeof(EspacioTrabajo)))
+            e.Effects = Ancestro<TreeViewItem>(e.OriginalSource) is null ? DragDropEffects.None : DragDropEffects.Move;
+        else
+            return;
+        e.Handled = true;
+    }
+
+    private void Arbol_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(typeof(NodoArchivo)) is NodoArchivo archivo)
+        {
+            e.Handled = true;
+            if (CarpetaBajo(e) is { } carpeta)
+                MoverArchivo(archivo.Ruta, carpeta);
+            return;
+        }
+
+        // Un espacio soltado sobre cualquier fila de otro: hacia arriba queda antes de él, hacia abajo, después.
+        if (e.Data.GetData(typeof(EspacioTrabajo)) is not EspacioTrabajo espacio
+            || Ancestro<TreeViewItem>(e.OriginalSource)?.DataContext is not NodoArchivo { EspacioDe: var destino }
+            || destino == espacio)
+            return;
+        e.Handled = true;
+        var indice = _recientes.Espacios.IndexOf(destino);
+        _recientes.Espacios.Remove(espacio);
+        _recientes.Espacios.Insert(indice, espacio);
+        _recientes.Guardar();
+        RefrescarArbol();
+    }
+
+    // Mueve el archivo en el disco (nunca pisa uno que ya exista) y la pestaña que lo tenga abierto lo sigue.
+    private void MoverArchivo(string origen, string carpeta)
+    {
+        var destino = Path.Combine(carpeta, Path.GetFileName(origen));
+        if (string.Equals(origen, destino, StringComparison.OrdinalIgnoreCase))
+            return;
+        try
+        {
+            File.Move(origen, destino, overwrite: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Avisar(File.Exists(destino) ? $"Ya existe un archivo con ese nombre en la carpeta de destino:\n{destino}" : $"No se pudo mover el archivo:\n{ex.Message}");
+            return;
+        }
+
+        if (_pestanas.FirstOrDefault(p => string.Equals(p.Ruta, origen, StringComparison.OrdinalIgnoreCase)) is { } pestana)
+        {
+            pestana.Mover(destino);
+            if (pestana == _activa)
+                ActualizarDocumento(); // las rutas relativas de la vista previa cambian con la carpeta
+        }
+        RefrescarArbol();
     }
 
     private void Guardar_Executed(object sender, ExecutedRoutedEventArgs e) => TrasSincronizar(() =>
@@ -1610,10 +2033,21 @@ public partial class MainWindow : Window
         AplicarLateral();
     }
 
+    // El aviso se cierra; "Actualización pendiente" sigue en la barra de estado.
+    private void CerrarAviso_Click(object sender, RoutedEventArgs e) => AvisoActualizacion.Visibility = Visibility.Collapsed;
+
+    private void DescargarActualizacion_Click(object sender, RoutedEventArgs e)
+    {
+        AvisoActualizacion.Visibility = Visibility.Collapsed;
+        Marca.Abrir(_urlActualizacion!);
+    }
+
     // Con la barra lateral automática desplegada, un clic fuera de ella (y de la barra de actividad) la oculta.
     private void Ventana_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_recientes.LateralFijo || !_lateralDesplegado || Contiene(Lateral, e.OriginalSource) || Contiene(BarraActividad, e.OriginalSource))
+        // Los clics en el selector de íconos (otra ventana, pero de la barra lateral) tampoco la ocultan.
+        if (_recientes.LateralFijo || !_lateralDesplegado || SelectorIconos.IsOpen
+            || Contiene(Lateral, e.OriginalSource) || Contiene(BarraActividad, e.OriginalSource))
             return;
         _lateralDesplegado = false;
         AplicarLateral();

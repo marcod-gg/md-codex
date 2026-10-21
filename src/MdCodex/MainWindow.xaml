@@ -83,7 +83,7 @@
                             <ContextMenu>
                         <MenuItem Header="_Nuevo" Command="New" InputGestureText="Ctrl+N" />
                         <MenuItem Header="_Abrir archivo…" Command="Open" InputGestureText="Ctrl+O" />
-                        <MenuItem Header="Abrir _carpeta…" Command="{x:Static local:Comandos.AbrirCarpeta}" />
+                        <MenuItem Header="Agregar _carpeta…" Command="{x:Static local:Comandos.AbrirCarpeta}" />
                         <MenuItem x:Name="MenuRecientes" Header="Abrir _reciente" />
                         <Separator />
                         <MenuItem Header="_Guardar" Command="Save" InputGestureText="Ctrl+S" />
@@ -124,7 +124,7 @@
                         <MenuItem Header="_Editor" Command="{x:Static local:Comandos.ModoEditor}" InputGestureText="Ctrl+3" />
                         <MenuItem Header="_Pro (por bloques)" Command="{x:Static local:Comandos.ModoPro}" InputGestureText="Ctrl+4" />
                         <Separator />
-                        <MenuItem Header="E_xplorador" Command="{x:Static local:Comandos.VerExplorador}" InputGestureText="Ctrl+Mayús+E" />
+                        <MenuItem Header="Espacios de _trabajo" Command="{x:Static local:Comandos.VerExplorador}" InputGestureText="Ctrl+Mayús+E" />
                         <MenuItem Header="E_squema" Command="{x:Static local:Comandos.VerEsquema}" InputGestureText="Ctrl+Mayús+O" />
                         <Separator />
                         <MenuItem Header="Pestaña _siguiente" Command="{x:Static local:Comandos.PestanaSiguiente}" InputGestureText="Ctrl+Tab" />
@@ -178,7 +178,7 @@
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="48" />
-                    <ColumnDefinition x:Name="ColumnaLateral" Width="260" />
+                    <ColumnDefinition x:Name="ColumnaLateral" Width="280" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" MinWidth="240" />
                 </Grid.ColumnDefinitions>
@@ -194,7 +194,7 @@
                     </ToggleButton>
                     <StackPanel>
                         <ToggleButton x:Name="ActividadExplorador" Style="{StaticResource BotonActividad}" Tag="Explorador"
-                                      Click="Actividad_Click" Content="&#xE8B7;" ToolTip="Explorador (Ctrl+Mayús+E)" />
+                                      Click="Actividad_Click" Content="&#xE8B7;" ToolTip="Espacios de trabajo (Ctrl+Mayús+E)" />
                         <ToggleButton x:Name="ActividadEsquema" Style="{StaticResource BotonActividad}" Tag="Esquema"
                                       Click="Actividad_Click" Content="&#xE8FD;" ToolTip="Esquema (Ctrl+Mayús+O)" />
                     </StackPanel>
@@ -208,36 +208,154 @@
                     <TranslateTransform x:Name="DesplazamientoLateral" />
                 </Border.RenderTransform>
                 <DockPanel>
-                    <Grid DockPanel.Dock="Top" Height="35" Margin="20,0,8,0">
-                        <TextBlock x:Name="TituloLateral" Style="{StaticResource EtiquetaTenue}" Text="EXPLORADOR" />
-                        <StackPanel x:Name="AccionesExplorador" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <DockPanel DockPanel.Dock="Top" Height="35" Margin="20,0,8,0">
+                        <StackPanel x:Name="AccionesExplorador" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource BotonIcono}" FontSize="14" Content="&#xE710;"
+                                    Click="NuevoEspacio_Click" ToolTip="Nuevo espacio de trabajo…" />
                             <Button Style="{StaticResource BotonIcono}" FontSize="14" Content="&#xED25;"
-                                    Command="{x:Static local:Comandos.AbrirCarpeta}" ToolTip="Abrir carpeta…" />
+                                    Command="{x:Static local:Comandos.AbrirCarpeta}" ToolTip="Agregar carpeta al espacio seleccionado…" />
                             <Button Style="{StaticResource BotonIcono}" FontSize="14" Content="&#xE72C;"
                                     Click="RefrescarArbol_Click" ToolTip="Actualizar el explorador" />
                         </StackPanel>
-                    </Grid>
+                        <TextBlock x:Name="TituloLateral" Style="{StaticResource EtiquetaTenue}" Text="EXPLORADOR" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <!-- Pide un nombre (archivo nuevo, espacio de trabajo): Enter acepta, Esc o un clic fuera cancela -->
+                    <StackPanel x:Name="FilaNombre" DockPanel.Dock="Top" Margin="24,0,12,0" Visibility="Collapsed">
+                        <!-- Aparece desplegándose hacia abajo (se anima ScaleY) -->
+                        <StackPanel.LayoutTransform>
+                            <ScaleTransform x:Name="EscalaFilaNombre" />
+                        </StackPanel.LayoutTransform>
+                        <TextBlock x:Name="EtiquetaNombre" FontSize="11" Margin="0,0,0,4" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource Chrome.Tenue}" />
+                        <!-- Sin margen inferior: queda pegada al árbol como una fila más -->
+                        <DockPanel>
+                        <!-- Ícono del espacio de trabajo, a la izquierda como en el árbol; no toma el foco -->
+                        <!-- Mismo tamaño que una fila del árbol (ícono y texto de 13) -->
+                        <Button x:Name="BotonElegirIcono" DockPanel.Dock="Left" Style="{StaticResource BotonIcono}" FontSize="13"
+                                Width="22" Height="24" Margin="0,0,2,0" Click="BotonElegirIcono_Click" ToolTip="Elegir ícono"
+                                Visibility="Collapsed" />
+                        <Grid>
+                            <TextBox x:Name="CajaNombre" FontSize="13" MinHeight="0" Height="24" Padding="6,0" VerticalContentAlignment="Center"
+                                     KeyDown="CajaNombre_KeyDown" LostKeyboardFocus="CajaNombre_LostKeyboardFocus" />
+                            <!-- Marcador: se ve mientras la caja está vacía -->
+                            <TextBlock x:Name="MarcadorNombre" IsHitTestVisible="False" Margin="8,0,8,0" VerticalAlignment="Center" FontSize="13"
+                                       TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Chrome.Tenue}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=CajaNombre}" Value="">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        </DockPanel>
+                        <!-- Íconos para elegir, flotando sobre lo de abajo. Ni la ventana emergente ni los botones
+                             toman el foco, así la caja de texto sigue abierta. Un clic fuera la cierra. -->
+                        <Popup x:Name="SelectorIconos" PlacementTarget="{Binding ElementName=BotonElegirIcono}" Placement="Bottom"
+                               VerticalOffset="4" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                            <Border Margin="0,0,8,8" Padding="6" CornerRadius="8" BorderThickness="1"
+                                    Background="{DynamicResource Lateral.Fondo}" BorderBrush="{DynamicResource Chrome.Borde}">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.3" />
+                                </Border.Effect>
+                                <WrapPanel x:Name="PanelIconos" Width="240" />
+                            </Border>
+                        </Popup>
+                    </StackPanel>
                     <Grid>
                         <DockPanel x:Name="PanelExplorador">
-                            <TextBlock x:Name="NombreCarpeta" DockPanel.Dock="Top" FontSize="11" FontWeight="Bold" Margin="20,0,8,4" />
-                            <TreeView x:Name="Arbol" Background="Transparent" BorderThickness="0" Padding="6,0"
+                            <!-- Sin desplazamiento horizontal: los nombres largos se cortan con "…" antes del margen derecho -->
+                            <TreeView x:Name="Arbol" Background="Transparent" BorderThickness="0" Padding="6,0,12,0"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                       PreviewMouseLeftButtonUp="Arbol_PreviewMouseLeftButtonUp" KeyDown="Arbol_KeyDown"
-                                      MouseDoubleClick="Arbol_MouseDoubleClick">
+                                      MouseDoubleClick="Arbol_MouseDoubleClick"
+                                      PreviewMouseRightButtonDown="Arbol_PreviewMouseRightButtonDown"
+                                      ContextMenuOpening="Arbol_ContextMenuOpening"
+                                      AllowDrop="True" PreviewMouseLeftButtonDown="Arbol_PreviewMouseLeftButtonDown"
+                                      PreviewMouseMove="Arbol_PreviewMouseMove" DragOver="Arbol_DragOver" Drop="Arbol_Drop"
+                                      TreeViewItem.Expanded="Arbol_Expandido" TreeViewItem.Collapsed="Arbol_Plegado">
+                                <TreeView.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem x:Name="MenuNuevoArchivoArbol" Header="Nuevo archivo…" Click="NuevoArchivo_Click" />
+                                        <MenuItem Header="Agregar carpeta…" Click="AgregarCarpeta_Click" />
+                                        <MenuItem x:Name="MenuQuitarCarpeta" Header="Quitar carpeta del espacio de trabajo" Click="QuitarCarpeta_Click" />
+                                        <Separator />
+                                        <MenuItem Header="Nuevo espacio de trabajo…" Click="NuevoEspacio_Click" />
+                                        <MenuItem x:Name="MenuRenombrarEspacio" Header="Editar nombre e ícono…" Click="RenombrarEspacio_Click" />
+                                        <MenuItem x:Name="MenuEliminarEspacio" Header="Eliminar espacio de trabajo" Click="EliminarEspacio_Click" />
+                                    </ContextMenu>
+                                </TreeView.ContextMenu>
                                 <TreeView.ItemContainerStyle>
+                                    <!-- Plantilla propia: la estándar da al encabezado ancho ilimitado y los nombres
+                                         largos se cortan en seco en vez de terminar en "…" -->
                                     <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                         <Setter Property="IsExpanded" Value="{Binding Expandido, Mode=TwoWay}" />
-                                        <Setter Property="MinHeight" Value="0" />
-                                        <Setter Property="Padding" Value="2,1" />
+                                        <Setter Property="Padding" Value="2,3" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="TreeViewItem">
+                                                    <StackPanel>
+                                                        <Border x:Name="Fila" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <DockPanel>
+                                                                <ToggleButton x:Name="Flecha" DockPanel.Dock="Left" Width="20" Focusable="False"
+                                                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                                                                    <ToggleButton.Template>
+                                                                        <ControlTemplate TargetType="ToggleButton">
+                                                                            <Border Background="Transparent">
+                                                                                <TextBlock x:Name="Icono" Text="&#xE76C;" FontFamily="{StaticResource Iconos}" FontSize="9"
+                                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                           Foreground="{DynamicResource Chrome.Tenue}" />
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <Trigger Property="IsChecked" Value="True">
+                                                                                    <Setter TargetName="Icono" Property="Text" Value="&#xE70D;" />
+                                                                                </Trigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </ToggleButton.Template>
+                                                                </ToggleButton>
+                                                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                                                            </DockPanel>
+                                                        </Border>
+                                                        <!-- ClipToBounds: al animar la altura, lo que no cabe se recorta en vez de desbordar -->
+                                                        <ItemsPresenter x:Name="Hijos" Margin="16,0,0,0" Visibility="Collapsed" ClipToBounds="True" />
+                                                    </StackPanel>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsExpanded" Value="True">
+                                                            <Setter TargetName="Hijos" Property="Visibility" Value="Visible" />
+                                                        </Trigger>
+                                                        <Trigger Property="HasItems" Value="False">
+                                                            <Setter TargetName="Flecha" Property="Visibility" Value="Hidden" />
+                                                        </Trigger>
+                                                        <Trigger SourceName="Fila" Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Fila" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                                                        </Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Fila" Property="Background" Value="{DynamicResource Chrome.Activo}" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
                                     </Style>
                                 </TreeView.ItemContainerStyle>
                                 <TreeView.ItemTemplate>
                                     <HierarchicalDataTemplate DataType="{x:Type local:NodoArchivo}" ItemsSource="{Binding Hijos}">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding Icono}" FontFamily="{StaticResource Iconos}" FontSize="13"
+                                        <!-- DockPanel y no StackPanel horizontal: así el nombre recibe el ancho que queda y puede cortarse -->
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding Icono}" FontFamily="{StaticResource Iconos}" FontSize="13"
                                                        Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{DynamicResource Chrome.Tenue}" />
-                                            <TextBlock x:Name="Nombre" Text="{Binding Nombre}" FontSize="13" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                            <TextBlock x:Name="Nombre" Text="{Binding Nombre}" FontSize="13" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Ruta}" />
+                                        </DockPanel>
                                         <HierarchicalDataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding EsEspacio}" Value="True">
+                                                <Setter TargetName="Nombre" Property="FontWeight" Value="Bold" />
+                                            </DataTrigger>
                                             <DataTrigger Binding="{Binding EsActual}" Value="True">
                                                 <Setter TargetName="Nombre" Property="Foreground" Value="{DynamicResource Acento}" />
                                                 <Setter TargetName="Nombre" Property="FontWeight" Value="SemiBold" />
@@ -247,11 +365,6 @@
                                 </TreeView.ItemTemplate>
                             </TreeView>
                         </DockPanel>
-                        <StackPanel x:Name="ExploradorVacio" Margin="20,4,16,0">
-                            <TextBlock Text="No hay ninguna carpeta abierta." TextWrapping="Wrap" Foreground="{DynamicResource Chrome.Tenue}" />
-                            <Button Content="Abrir carpeta" Command="{x:Static local:Comandos.AbrirCarpeta}"
-                                    HorizontalAlignment="Stretch" Margin="0,12,0,0" />
-                        </StackPanel>
                         <ListBox x:Name="ListaEsquema" Background="Transparent" BorderThickness="0" Padding="6,0"
                                  PreviewMouseLeftButtonUp="ListaEsquema_PreviewMouseLeftButtonUp">
                             <ListBox.ItemContainerStyle>
@@ -358,6 +471,27 @@
                 </Grid>
             </Grid>
 
+            <!-- Aviso discreto de nueva versión, en la esquina del área de trabajo -->
+            <Border x:Name="AvisoActualizacion" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,20,20" Padding="14,10,6,12" Width="300" CornerRadius="8" BorderThickness="1"
+                    Background="{DynamicResource Lateral.Fondo}" BorderBrush="{DynamicResource Chrome.Borde}" Visibility="Collapsed">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.3" />
+                </Border.Effect>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" VerticalAlignment="Top" Style="{StaticResource BotonIcono}" FontSize="10"
+                            Width="24" Height="24" Content="&#xE8BB;" Click="CerrarAviso_Click" ToolTip="Cerrar" />
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE896;" FontFamily="{StaticResource Iconos}" FontSize="16"
+                               Margin="0,2,10,0" VerticalAlignment="Top" Foreground="{DynamicResource Acento}" />
+                    <StackPanel Margin="0,2,0,0">
+                        <TextBlock x:Name="TextoActualizacion" FontSize="13" TextWrapping="Wrap" />
+                        <TextBlock FontSize="12" Margin="0,6,0,0">
+                            <Hyperlink Click="DescargarActualizacion_Click" Foreground="{DynamicResource Acento}">Descargar</Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
             <!-- ===== Barra de estado ===== -->
             <Grid Grid.Row="2" Background="{DynamicResource Estado.Fondo}">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="4,0,0,0">
@@ -370,6 +504,13 @@
                     <Button x:Name="EstadoModo" Style="{StaticResource ItemEstado}" Click="EstadoModo_Click" ToolTip="Cambiar de modo" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,6,0">
+                    <Button x:Name="EstadoActualizacion" Style="{StaticResource ItemEstado}" Visibility="Collapsed"
+                            Click="DescargarActualizacion_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE896;" FontFamily="{StaticResource Iconos}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Actualización pendiente" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="EstadoPosicion" Style="{StaticResource ItemEstado}" />
                     <Button x:Name="EstadoPalabras" Style="{StaticResource ItemEstado}" />
                     <Button x:Name="EstadoCodificacion" Style="{StaticResource ItemEstado}" ToolTip="Codificación del archivo" />
