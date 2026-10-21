@@ -43,11 +43,13 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     // Sección "Documentos" (primer nivel) y sus grupos "Abiertos" y "Recientes": se pliegan como carpetas,
     // pero no son lugares del disco.
     public bool EsGrupo { get; private init; }
-    public bool EsSeccion => EsGrupo && Padre is null;
+    // Los grupos (Abiertos, Recientes) se muestran como encabezados.
+    public bool EsSeccion => EsGrupo;
     public bool EnDocumentos => EsGrupo || Padre?.EnDocumentos == true;
     private string? _iconoGrupo;
 
-    public static NodoArchivo DeDocumentos(bool expandido) => Grupo("Documentos", "", null, expandido);
+    // Raíz (no se muestra) del panel Documentos; sus hijos son los grupos.
+    public static NodoArchivo DeDocumentos() => Grupo("Documentos", "", null, expandido: true);
 
     // Rehace los grupos: "Abiertos" (sin espacio de trabajo) solo si hay alguno; "Recientes" siempre que haya.
     public void LlenarDocumentos(IEnumerable<string> abiertos, IEnumerable<string> recientes)

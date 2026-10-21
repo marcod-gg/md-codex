@@ -21,35 +21,41 @@ public static class Actualizacion
     }
 
     // Devuelve la última release si es más nueva que la instalada. Cualquier fallo (sin red,
-    // límite de la API, sin releases) se ignora: el aviso es opcional.
+    // límite de la API, sin releases) se ignora: el aviso al iniciar es opcional.
     public static async Task<Release?> BuscarAsync()
     {
         try
         {
-            using var http = Cliente(TimeSpan.FromSeconds(10));
-            using var json = JsonDocument.Parse(
-                await http.GetStringAsync("https://api.github.com/repos/marcod-gg/md-codex/releases/latest"));
-            var raiz = json.RootElement;
-            var version = raiz.GetProperty("tag_name").GetString()!.TrimStart('v', 'V');
-            if (System.Version.Parse(version) <= System.Version.Parse(Marca.Version))
-                return null;
-
-            string? instalador = null, sha256 = null;
-            foreach (var archivo in raiz.GetProperty("assets").EnumerateArray())
-            {
-                if (!archivo.GetProperty("name").GetString()!.EndsWith("-instalador.exe", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                instalador = archivo.GetProperty("browser_download_url").GetString();
-                if (archivo.TryGetProperty("digest", out var digest) && digest.GetString() is { } d && d.StartsWith("sha256:"))
-                    sha256 = d["sha256:".Length..];
-                break;
-            }
-            return new Release(version, raiz.GetProperty("html_url").GetString()!, instalador, sha256);
+            return await ConsultarAsync();
         }
         catch
         {
             return null;
         }
+    }
+
+    // Como BuscarAsync, pero los fallos llegan a quien pregunta (la búsqueda a pedido los muestra).
+    public static async Task<Release?> ConsultarAsync()
+    {
+        using var http = Cliente(TimeSpan.FromSeconds(10));
+        using var json = JsonDocument.Parse(
+            await http.GetStringAsync("https://api.github.com/repos/marcod-gg/md-codex/releases/latest"));
+        var raiz = json.RootElement;
+        var version = raiz.GetProperty("tag_name").GetString()!.TrimStart('v', 'V');
+        if (System.Version.Parse(version) <= System.Version.Parse(Marca.Version))
+            return null;
+
+        string? instalador = null, sha256 = null;
+        foreach (var archivo in raiz.GetProperty("assets").EnumerateArray())
+        {
+            if (!archivo.GetProperty("name").GetString()!.EndsWith("-instalador.exe", StringComparison.OrdinalIgnoreCase))
+                continue;
+            instalador = archivo.GetProperty("browser_download_url").GetString();
+            if (archivo.TryGetProperty("digest", out var digest) && digest.GetString() is { } d && d.StartsWith("sha256:"))
+                sha256 = d["sha256:".Length..];
+            break;
+        }
+        return new Release(version, raiz.GetProperty("html_url").GetString()!, instalador, sha256);
     }
 
     // Descarga el instalador a %TEMP%\MDCodex y, si GitHub publica su SHA-256, lo comprueba.

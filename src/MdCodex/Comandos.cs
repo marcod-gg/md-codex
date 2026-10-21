@@ -13,6 +13,7 @@ public static class Comandos
     public static readonly RoutedUICommand AbrirCarpeta = new("Abrir carpeta", nameof(AbrirCarpeta), typeof(Comandos));
     public static readonly RoutedUICommand VerExplorador = new("Espacios de trabajo", nameof(VerExplorador), typeof(Comandos));
     public static readonly RoutedUICommand VerEsquema = new("Esquema", nameof(VerEsquema), typeof(Comandos));
+    public static readonly RoutedUICommand VerDocumentos = new("Documentos", nameof(VerDocumentos), typeof(Comandos));
     public static readonly RoutedUICommand VerConfiguracion = new("Configuración", nameof(VerConfiguracion), typeof(Comandos));
     public static readonly RoutedUICommand Acercar = new("Acercar", nameof(Acercar), typeof(Comandos));
     public static readonly RoutedUICommand Alejar = new("Alejar", nameof(Alejar), typeof(Comandos));

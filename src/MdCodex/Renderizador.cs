@@ -106,6 +106,7 @@ public static partial class Renderizador
               pestana = m.id;
               if (m.base) base.setAttribute('href', m.base); else base.removeAttribute('href');
               main.innerHTML = m.html;
+              imagenesLocales();
               resaltarCodigo();
               dibujarDiagramas();
               if (m.scroll != null) moverDesdeApp(m.scroll);
@@ -116,6 +117,16 @@ public static partial class Renderizador
               moverDesdeApp(m.final ? document.documentElement.scrollHeight : yDeLinea(m.linea));
             }
           });
+
+          // Imágenes con dirección file:/// (en otro disco que el documento): la página no puede abrirlas,
+          // así que se piden a la app con el mismo camino que usa para todo ("/D/carpeta/x.png",
+          // "/UNC/servidor/recurso/x.png"); la app solo entrega las de la carpeta de imágenes.
+          function imagenesLocales() {
+            for (const img of main.querySelectorAll('img[src^="file:"]')) {
+              const u = new URL(img.getAttribute('src'));
+              img.setAttribute('src', u.host ? '/UNC/' + u.host + u.pathname : u.pathname.replace(/^\/([A-Za-z]):/, '/$1'));
+            }
+          }
 
           function moverDesdeApp(y) {
             desdeApp = true;

@@ -27,7 +27,7 @@ public partial class MainWindow : Window
     // ".mdcodex" para no chocar con el filtro que sirve los archivos de los documentos.
     private const string HostPro = "mdcodex.editor";
 
-    private enum Panel { Explorador, Esquema }
+    private enum Panel { Documentos, Explorador, Esquema }
 
     private readonly ObservableCollection<Pestana> _pestanas = [];
     // Documento vacío que muestra el editor cuando no hay pestañas abiertas.
@@ -168,13 +168,7 @@ public partial class MainWindow : Window
             }
 
             if (Config.BuscarActualizaciones && await Actualizacion.BuscarAsync() is { } nueva)
-            {
-                _actualizacion = nueva;
-                TextoActualizacion.Text = $"MD Codex {nueva.Version} está disponible.";
-                EstadoActualizacion.ToolTip = $"MD Codex {nueva.Version} está disponible. Clic para actualizar.";
-                AvisoActualizacion.Visibility = Visibility.Visible;
-                EstadoActualizacion.Visibility = Visibility.Visible;
-            }
+                MostrarActualizacion(nueva);
         };
     }
 
@@ -434,33 +428,38 @@ public partial class MainWindow : Window
     private sealed record Ubicacion(string Host, string Raiz, string Base);
 
     // La raíz virtual de un documento es la carpeta abierta en el Explorador que lo contiene, o su
-    // propia carpeta si no está en ninguna. La URL base incluye la ruta del documento bajo esa raíz, así
-    // funcionan rutas como ../img/x.png sin dar acceso a nada fuera de la raíz.
+    // propia carpeta si no está en ninguna. La URL base lleva la ruta completa de la carpeta del documento
+    // ("https://host/C/Users/…/"), así los enlaces relativos llegan al archivo real aunque suban con "../".
+    // Solo se sirve lo que está dentro de la raíz o en la carpeta de imágenes (ver RutaLocal).
     private Ubicacion? Ubicar(Pestana p)
     {
         if (p.Carpeta is not { } carpeta)
             return null;
         var raiz = RaizDe(carpeta) ?? carpeta;
-        var relativa = Path.GetRelativePath(raiz, carpeta);
-        var camino = relativa == "." ? "" : string.Join('/', relativa.Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString)) + "/";
         var host = Documentos.HostPara(raiz);
-        return new Ubicacion(host, raiz, $"https://{host}/{camino}");
+        return new Ubicacion(host, raiz, $"https://{host}/{Documentos.CaminoUrl(carpeta)}/");
     }
 
-    // Traduce una URL virtual a un archivo dentro de su raíz; null si no corresponde o se sale de ella.
+    // Traduce una URL virtual a un archivo permitido; null si no corresponde o está fuera de lo permitido.
     private string? RutaLocal(Uri destino)
     {
+        var camino = Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'));
         // Las librerías de la vista previa viven en la carpeta Vista junto al .exe.
-        var raiz = destino.Host.Equals(Documentos.HostRecursos, StringComparison.OrdinalIgnoreCase)
-            ? Path.Combine(AppContext.BaseDirectory, "Vista")
-            : _carpetasPorHost.GetValueOrDefault(destino.Host);
-        if (raiz is null)
+        if (destino.Host.Equals(Documentos.HostRecursos, StringComparison.OrdinalIgnoreCase))
+        {
+            var vista = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Vista")));
+            var recurso = Path.GetFullPath(Path.Combine(vista, camino));
+            return Documentos.EstaDentro(recurso, vista) ? recurso : null;
+        }
+        if (_carpetasPorHost.GetValueOrDefault(destino.Host) is not { } raiz || Documentos.RutaDeCamino(camino) is not { } enDisco)
             return null;
-        // Las dos rutas pasan por GetFullPath: expande los nombres cortos (MARCOG~1), y si solo una se
-        // expandiera, el archivo parecería estar fuera de la raíz y se negaría.
-        raiz = Path.TrimEndingDirectorySeparator(Path.GetFullPath(raiz));
-        var ruta = Path.GetFullPath(Path.Combine(raiz, Uri.UnescapeDataString(destino.AbsolutePath.TrimStart('/'))));
-        return Documentos.EstaDentro(ruta, raiz) ? ruta : null;
+        // Todo pasa por GetFullPath: expande los nombres cortos (MARCOG~1), y si solo una ruta se expandiera,
+        // el archivo parecería estar fuera de la carpeta y se negaría.
+        var ruta = Path.GetFullPath(enDisco);
+        var permitidas = new List<string> { raiz };
+        if (Imagenes.CarpetaFija is { } imagenes)
+            permitidas.Add(imagenes);
+        return permitidas.Any(c => Documentos.EstaDentro(ruta, Path.TrimEndingDirectorySeparator(Path.GetFullPath(c)))) ? ruta : null;
     }
 
     private CoreWebView2WebResourceResponse ServirArchivo(CoreWebView2Environment entorno, string uri)
@@ -1239,25 +1238,16 @@ public partial class MainWindow : Window
 
     private string? RaizDe(string ruta) => _carpetas.FirstOrDefault(c => Documentos.EstaDentro(ruta, c));
 
-    // Sección "Documentos", arriba de los espacios de trabajo: los abiertos que no están en ningún espacio
-    // y los recientes. Se rehace sola (sin rearmar el árbol) al abrir o cerrar pestañas y al cambiar los recientes.
-    private NodoArchivo? _documentos;
+    // Panel Documentos: los abiertos que no están en ningún espacio de trabajo y los recientes, agrupados.
+    // Se rehace solo (sin tocar el árbol de espacios) al abrir o cerrar pestañas y al cambiar los recientes.
+    private readonly NodoArchivo _documentos = NodoArchivo.DeDocumentos();
 
     private void ActualizarDocumentos()
     {
-        if (_documentos is null)
-        {
-            _documentos = NodoArchivo.DeDocumentos(_recientes.DocumentosExpandido);
-            _documentos.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName != nameof(NodoArchivo.Expandido))
-                    return;
-                _recientes.DocumentosExpandido = _documentos.Expandido;
-                _recientes.Guardar();
-            };
-        }
         var abiertos = _pestanas.Where(p => p.Ruta is not null && RaizDe(p.Ruta) is null).Select(p => p.Ruta!);
         _documentos.LlenarDocumentos(abiertos, _recientes.Archivos);
+        ArbolDocumentos.ItemsSource ??= _documentos.Hijos;
+        DocumentosVacio.Visibility = Visible(_documentos.Hijos.Count == 0);
         RevelarActual();
     }
 
@@ -1272,9 +1262,8 @@ public partial class MainWindow : Window
         var espacios = _recientes.Espacios.Select(NodoArchivo.DeEspacio).ToList();
         foreach (var espacio in espacios)
             NodoArchivo.Expandir(espacio.Hijos, expandidas);
+        Arbol.ItemsSource = espacios;
         ActualizarDocumentos();
-        Arbol.ItemsSource = new[] { _documentos! }.Concat(espacios).ToList();
-        RevelarActual();
 
         var carpetas = _carpetas.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         EstadoCarpeta.Text = carpetas.Count switch
@@ -1337,6 +1326,7 @@ public partial class MainWindow : Window
     {
         if (Arbol.ItemsSource is IEnumerable<NodoArchivo> nodos)
             NodoArchivo.Revelar(nodos, _activa?.Ruta);
+        NodoArchivo.Revelar(_documentos.Hijos, _activa?.Ruta);
     }
 
     // ---------- Barra lateral ----------
@@ -1371,13 +1361,21 @@ public partial class MainWindow : Window
             : "Barra lateral automática. Clic para dejarla siempre abierta (Ctrl+Mayús+B)";
         ActividadExplorador.IsChecked = visible && _panel == Panel.Explorador;
         ActividadEsquema.IsChecked = visible && _panel == Panel.Esquema;
+        ActividadDocumentos.IsChecked = visible && _panel == Panel.Documentos;
 
         var explorador = _panel == Panel.Explorador;
-        TituloLateral.Text = explorador ? "ESPACIOS DE TRABAJO" : "ESQUEMA";
+        var esquema = _panel == Panel.Esquema;
+        TituloLateral.Text = _panel switch
+        {
+            Panel.Documentos => "DOCUMENTOS",
+            Panel.Explorador => "ESPACIOS DE TRABAJO",
+            _ => "ESQUEMA",
+        };
         AccionesExplorador.Visibility = Visible(explorador);
         PanelExplorador.Visibility = Visible(explorador);
-        ListaEsquema.Visibility = Visible(!explorador && _titulos.Count > 0);
-        EsquemaVacio.Visibility = Visible(!explorador && _titulos.Count == 0);
+        PanelDocumentos.Visibility = Visible(_panel == Panel.Documentos);
+        ListaEsquema.Visibility = Visible(esquema && _titulos.Count > 0);
+        EsquemaVacio.Visibility = Visible(esquema && _titulos.Count == 0);
         EsquemaVacio.Text = _activa is null ? "No hay ningún documento abierto." : "El documento no tiene títulos.";
     }
 
@@ -1880,7 +1878,7 @@ public partial class MainWindow : Window
 
     private void Arbol_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && Arbol.SelectedItem is NodoArchivo { EsCarpeta: false, EsEspacio: false } nodo)
+        if (e.Key == Key.Enter && ((TreeView)sender).SelectedItem is NodoArchivo { EsCarpeta: false, EsEspacio: false } nodo)
         {
             e.Handled = true;
             AbrirArchivo(nodo.Ruta);
@@ -2230,6 +2228,8 @@ public partial class MainWindow : Window
 
     private void VerEsquema_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Esquema);
 
+    private void VerDocumentos_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Documentos);
+
     // Ctrl+, o el engranaje: abre la ventana de configuración, o la cierra si ya está abierta.
     private void VerConfiguracion_Executed(object sender, ExecutedRoutedEventArgs e)
     {
@@ -2244,6 +2244,7 @@ public partial class MainWindow : Window
     private void AbrirConfiguracion()
     {
         MostrarConfiguracion();
+        AplicarCarpetaImagenes(); // muestra dónde quedan las imágenes (y crea la carpeta fija si falta)
         CategoriaInicial.IsChecked = true;
         CapaConfiguracion.Visibility = Visibility.Visible;
         ActividadConfiguracion.IsChecked = true;
@@ -2298,6 +2299,7 @@ public partial class MainWindow : Window
         OpcionResaltarLinea.IsChecked = Config.ResaltarLinea;
         OpcionSincronizarDesplazamiento.IsChecked = Config.SincronizarDesplazamiento;
         CajaCarpetaImagenes.Text = Config.CarpetaImagenes;
+        ResultadoBusqueda.Text = "";
         _mostrandoConfiguracion = false;
     }
 
@@ -2367,12 +2369,47 @@ public partial class MainWindow : Window
 
     private void CajaCarpetaImagenes_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => AplicarCarpetaImagenes();
 
-    // Se guarda ya validada; si no sirve, vuelve a la de siempre y la caja lo muestra.
+    // Se guarda ya validada (si no sirve, vuelve a la predeterminada y la caja lo muestra). Una carpeta fija
+    // que no existe se crea ahora; una por documento, al pegar la primera imagen.
     private void AplicarCarpetaImagenes()
     {
         Config.CarpetaImagenes = Imagenes.Carpeta = Configuracion.CarpetaValida(CajaCarpetaImagenes.Text);
         CajaCarpetaImagenes.Text = Config.CarpetaImagenes;
         _recientes.Guardar();
+        string? error = null;
+        if (Imagenes.CarpetaFija is { } fija)
+        {
+            try
+            {
+                Directory.CreateDirectory(fija);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                error = $"No se pudo crear la carpeta: {ex.Message}";
+            }
+        }
+        DetalleCarpetaImagenes.Text = error ?? (Imagenes.CarpetaFija is not null
+            ? "Una sola carpeta para las imágenes de todos los documentos."
+            : _activa?.Carpeta is { } documento
+                ? $"Una carpeta junto a cada documento. Para el documento abierto: {Imagenes.CarpetaPara(documento)}"
+                : "Una carpeta con ese nombre junto a cada documento.");
+    }
+
+    private void SeleccionarCarpetaImagenes_Click(object sender, RoutedEventArgs e)
+    {
+        var dialogo = new OpenFolderDialog { Title = "Carpeta de las imágenes" };
+        if (Imagenes.CarpetaFija is { } actual && Directory.Exists(actual))
+            dialogo.InitialDirectory = actual;
+        if (dialogo.ShowDialog(this) != true)
+            return;
+        CajaCarpetaImagenes.Text = dialogo.FolderName;
+        AplicarCarpetaImagenes();
+    }
+
+    private void CarpetaImagenesPredeterminada_Click(object sender, RoutedEventArgs e)
+    {
+        CajaCarpetaImagenes.Text = Configuracion.CarpetaImagenesPorDefecto;
+        AplicarCarpetaImagenes();
     }
 
     // Opciones del editor de texto (y su tamaño de letra, que sigue al zoom).
@@ -2454,6 +2491,52 @@ public partial class MainWindow : Window
 
     // El aviso se cierra; "Actualización pendiente" sigue en la barra de estado.
     private void CerrarAviso_Click(object sender, RoutedEventArgs e) => AvisoActualizacion.Visibility = Visibility.Collapsed;
+
+    // La tarjeta de la esquina y "Actualización pendiente" en la barra de estado. Si ya se descargó, se deja como está.
+    private void MostrarActualizacion(Actualizacion.Release nueva)
+    {
+        if (_instalador is not null || _descargando)
+            return;
+        _actualizacion = nueva;
+        TextoActualizacion.Text = $"MD Codex {nueva.Version} está disponible.";
+        EstadoActualizacion.ToolTip = $"MD Codex {nueva.Version} está disponible. Clic para actualizar.";
+        AvisoActualizacion.Visibility = Visibility.Visible;
+        EstadoActualizacion.Visibility = Visibility.Visible;
+    }
+
+    // Búsqueda a pedido (Ayuda → Buscar actualizaciones, o "Buscar ahora" en la configuración): siempre
+    // responde, también si no hay nada nuevo o si GitHub no contesta.
+    private async void BuscarActualizaciones_Click(object sender, RoutedEventArgs e)
+    {
+        var enConfiguracion = sender == BotonBuscarActualizaciones;
+        BotonBuscarActualizaciones.IsEnabled = false;
+        ResultadoBusqueda.Text = enConfiguracion ? "Buscando…" : "";
+        string mensaje;
+        try
+        {
+            if (await Actualizacion.ConsultarAsync() is { } nueva)
+            {
+                MostrarActualizacion(nueva);
+                mensaje = $"MD Codex {nueva.Version} está disponible. Usa «Actualizar» en el aviso de la esquina.";
+            }
+            else
+            {
+                mensaje = $"Tienes la versión más reciente ({Marca.Version}).";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensaje = $"No se pudo consultar GitHub: {ex.Message}";
+        }
+        finally
+        {
+            BotonBuscarActualizaciones.IsEnabled = true;
+        }
+        if (enConfiguracion)
+            ResultadoBusqueda.Text = mensaje;
+        else
+            MessageBox.Show(this, mensaje, "MD Codex", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
 
     // Primero descarga el instalador en segundo plano; ya descargado, reinicia la app para instalarlo.
     private async void Actualizar_Click(object sender, RoutedEventArgs e)

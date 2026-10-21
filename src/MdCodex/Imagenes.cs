@@ -4,12 +4,13 @@ using System.Windows.Media.Imaging;
 
 namespace MdCodex;
 
-// Imágenes que se agregan a un documento desde el modo Pro: se guardan en una carpeta junto al
-// documento ("imagenes/" salvo que se configure otra) y el Markdown las enlaza con una ruta relativa,
-// así el documento sigue siendo portable.
+// Imágenes que se agregan a un documento desde el modo Pro: se copian a la carpeta de imágenes (por
+// omisión, Imágenes\md-codex; o una carpeta con nombre junto a cada documento) y el Markdown las enlaza
+// con una ruta relativa al documento. Si la carpeta está en otro disco, no hay ruta relativa posible y se
+// usa la dirección file:/// de la imagen.
 public static class Imagenes
 {
-    // Carpeta relativa al documento, de la configuración (ya validada).
+    // De la configuración (ya validada): ruta completa, o nombre relativo al documento.
     public static string Carpeta { get; set; } = Configuracion.CarpetaImagenesPorDefecto;
 
     public const long TamanoMaximo = 20 * 1024 * 1024;
@@ -21,18 +22,26 @@ public static class Imagenes
     public static bool EsImagen(string ruta) =>
         Extensiones.Contains(Path.GetExtension(ruta), StringComparer.OrdinalIgnoreCase);
 
-    // Copia la imagen a la carpeta de imágenes (salvo que ya esté dentro de la carpeta del documento) y devuelve
-    // la ruta para el Markdown.
+    // La carpeta fija de imágenes, si la configuración es una ruta completa; null si es una por documento.
+    public static string? CarpetaFija => Path.IsPathFullyQualified(Carpeta) ? Carpeta : null;
+
+    // Dónde quedan las imágenes de un documento de esa carpeta.
+    public static string CarpetaPara(string carpetaDocumento) =>
+        Path.Combine(carpetaDocumento, Configuracion.CarpetaValida(Carpeta).Replace('/', Path.DirectorySeparatorChar));
+
+    // Copia la imagen a la carpeta de imágenes (salvo que ya esté ahí o dentro de la carpeta del documento)
+    // y devuelve la ruta para el Markdown.
     public static string Incorporar(string carpetaDocumento, string origen)
     {
         var completa = Path.GetFullPath(origen);
         if (new FileInfo(completa).Length > TamanoMaximo)
             throw new InvalidOperationException($"{Path.GetFileName(completa)} pesa más de 20 MB.");
 
+        var carpeta = CarpetaPara(carpetaDocumento);
         var destino = completa;
-        if (!Documentos.EstaDentro(completa, carpetaDocumento))
+        if (!Documentos.EstaDentro(completa, carpetaDocumento) && !Documentos.EstaDentro(completa, carpeta))
         {
-            destino = NombreLibre(CarpetaImagenes(carpetaDocumento), Path.GetFileName(completa));
+            destino = NombreLibre(Crear(carpeta), Path.GetFileName(completa));
             File.Copy(completa, destino);
         }
         return RutaMarkdown(carpetaDocumento, destino);
@@ -41,7 +50,7 @@ public static class Imagenes
     // Guarda como PNG una imagen pegada sin archivo (por ejemplo, una captura de pantalla).
     public static string IncorporarPortapapeles(string carpetaDocumento, BitmapSource imagen)
     {
-        var destino = NombreLibre(CarpetaImagenes(carpetaDocumento), $"pegada-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        var destino = NombreLibre(Crear(CarpetaPara(carpetaDocumento)), $"pegada-{DateTime.Now:yyyyMMdd-HHmmss}.png");
         using (var flujo = File.Create(destino))
         {
             var codificador = new PngBitmapEncoder();
@@ -51,9 +60,8 @@ public static class Imagenes
         return RutaMarkdown(carpetaDocumento, destino);
     }
 
-    private static string CarpetaImagenes(string carpetaDocumento)
+    private static string Crear(string carpeta)
     {
-        var carpeta = Path.Combine(carpetaDocumento, Configuracion.CarpetaValida(Carpeta).Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(carpeta);
         return carpeta;
     }
@@ -73,6 +81,12 @@ public static class Imagenes
         return candidato;
     }
 
-    private static string RutaMarkdown(string carpetaDocumento, string archivo) =>
-        string.Join('/', Path.GetRelativePath(carpetaDocumento, archivo).Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString));
+    // Relativa al documento (puede subir con "../"); en otro disco, la dirección file:/// completa.
+    private static string RutaMarkdown(string carpetaDocumento, string archivo)
+    {
+        var relativa = Path.GetRelativePath(carpetaDocumento, archivo);
+        if (Path.IsPathRooted(relativa))
+            return new Uri(archivo).AbsoluteUri;
+        return string.Join('/', relativa.Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString));
+    }
 }

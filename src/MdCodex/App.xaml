@@ -404,6 +404,71 @@
             </Setter>
         </Style>
 
+        <!-- Botón de texto de la configuración (Buscar ahora, Seleccionar carpeta…) -->
+        <Style x:Key="BotonSecundario" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fondo" CornerRadius="6" BorderThickness="1" Padding="{TemplateBinding Padding}"
+                                BorderBrush="{DynamicResource Chrome.Borde}" Background="{DynamicResource Lateral.Fondo}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                                <Setter TargetName="Fondo" Property="BorderBrush" Value="{DynamicResource Chrome.Tenue}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Fondo" Property="BorderBrush" Value="{DynamicResource Acento}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Fondo" Property="Background" Value="{DynamicResource Chrome.Activo}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Caja de texto de la configuración, con los colores del tema -->
+        <Style x:Key="CajaConfiguracion" TargetType="TextBox">
+            <Setter Property="Foreground" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource Chrome.Texto}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource Acento}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Borde" CornerRadius="6" BorderThickness="1"
+                                BorderBrush="{DynamicResource Chrome.Borde}" Background="{DynamicResource Lateral.Fondo}">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Borde" Property="BorderBrush" Value="{DynamicResource Chrome.Tenue}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Borde" Property="BorderBrush" Value="{DynamicResource Acento}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ExplicacionConfiguracion" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Margin" Value="0,3,0,0" />

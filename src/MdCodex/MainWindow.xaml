@@ -11,6 +11,82 @@
         <WindowChrome CaptionHeight="35" ResizeBorderThickness="6" GlassFrameThickness="0"
                       CornerRadius="0" UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
+    <!-- Nodos de los árboles de la barra lateral (Espacios de trabajo y Documentos) -->
+    <Window.Resources>
+        <!-- Plantilla propia: la estándar da al encabezado ancho ilimitado y los nombres
+             largos se cortan en seco en vez de terminar en "…" -->
+        <Style x:Key="EstiloNodo" TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+            <Setter Property="IsExpanded" Value="{Binding Expandido, Mode=TwoWay}" />
+            <Setter Property="Padding" Value="2,3" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TreeViewItem">
+                        <StackPanel>
+                            <Border x:Name="Fila" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                <DockPanel>
+                                    <ToggleButton x:Name="Flecha" DockPanel.Dock="Left" Width="20" Focusable="False"
+                                                  IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="Transparent">
+                                                    <TextBlock x:Name="Icono" Text="&#xE76C;" FontFamily="{StaticResource Iconos}" FontSize="9"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource Chrome.Tenue}" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="Icono" Property="Text" Value="&#xE70D;" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+                            <!-- ClipToBounds: al animar la altura, lo que no cabe se recorta en vez de desbordar -->
+                            <ItemsPresenter x:Name="Hijos" Margin="16,0,0,0" Visibility="Collapsed" ClipToBounds="True" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="Hijos" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="Flecha" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                            <Trigger SourceName="Fila" Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fila" Property="Background" Value="{DynamicResource Chrome.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Fila" Property="Background" Value="{DynamicResource Chrome.Activo}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <HierarchicalDataTemplate x:Key="PlantillaNodo" DataType="{x:Type local:NodoArchivo}" ItemsSource="{Binding Hijos}">
+            <!-- DockPanel y no StackPanel horizontal: así el nombre recibe el ancho que queda y puede cortarse -->
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="{Binding Icono}" FontFamily="{StaticResource Iconos}" FontSize="13"
+                           Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{DynamicResource Chrome.Tenue}" />
+                <TextBlock x:Name="Nombre" Text="{Binding Nombre}" FontSize="13" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Ruta}" />
+            </DockPanel>
+            <HierarchicalDataTemplate.Triggers>
+                <DataTrigger Binding="{Binding EsEspacio}" Value="True">
+                    <Setter TargetName="Nombre" Property="FontWeight" Value="Bold" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding EsSeccion}" Value="True">
+                    <Setter TargetName="Nombre" Property="FontWeight" Value="Bold" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding EsActual}" Value="True">
+                    <Setter TargetName="Nombre" Property="Foreground" Value="{DynamicResource Acento}" />
+                    <Setter TargetName="Nombre" Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+            </HierarchicalDataTemplate.Triggers>
+        </HierarchicalDataTemplate>
+    </Window.Resources>
     <Window.CommandBindings>
         <CommandBinding Command="New" Executed="Nuevo_Executed" />
         <CommandBinding Command="Open" Executed="Abrir_Executed" />
@@ -30,6 +106,7 @@
         <CommandBinding Command="{x:Static local:Comandos.ModoPro}" Executed="ModoPro_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.VerExplorador}" Executed="VerExplorador_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.VerEsquema}" Executed="VerEsquema_Executed" />
+        <CommandBinding Command="{x:Static local:Comandos.VerDocumentos}" Executed="VerDocumentos_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.VerConfiguracion}" Executed="VerConfiguracion_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.Acercar}" Executed="Acercar_Executed" />
         <CommandBinding Command="{x:Static local:Comandos.Alejar}" Executed="Alejar_Executed" />
@@ -54,6 +131,7 @@
         <KeyBinding Key="D4" Modifiers="Control" Command="{x:Static local:Comandos.ModoPro}" />
         <KeyBinding Key="E" Modifiers="Control+Shift" Command="{x:Static local:Comandos.VerExplorador}" />
         <KeyBinding Key="O" Modifiers="Control+Shift" Command="{x:Static local:Comandos.VerEsquema}" />
+        <KeyBinding Key="D" Modifiers="Control+Shift" Command="{x:Static local:Comandos.VerDocumentos}" />
         <KeyBinding Key="OemComma" Modifiers="Control" Command="{x:Static local:Comandos.VerConfiguracion}" />
         <KeyBinding Key="OemPlus" Modifiers="Control" Command="{x:Static local:Comandos.Acercar}" />
         <KeyBinding Key="Add" Modifiers="Control" Command="{x:Static local:Comandos.Acercar}" />
@@ -135,6 +213,7 @@
                         <MenuItem Header="_Editor" Command="{x:Static local:Comandos.ModoEditor}" InputGestureText="Ctrl+3" />
                         <MenuItem Header="_Pro (por bloques)" Command="{x:Static local:Comandos.ModoPro}" InputGestureText="Ctrl+4" />
                         <Separator />
+                        <MenuItem Header="_Documentos" Command="{x:Static local:Comandos.VerDocumentos}" InputGestureText="Ctrl+Mayús+D" />
                         <MenuItem Header="Espacios de _trabajo" Command="{x:Static local:Comandos.VerExplorador}" InputGestureText="Ctrl+Mayús+E" />
                         <MenuItem Header="E_squema" Command="{x:Static local:Comandos.VerEsquema}" InputGestureText="Ctrl+Mayús+O" />
                         <MenuItem Header="_Configuración" Command="{x:Static local:Comandos.VerConfiguracion}" InputGestureText="Ctrl+," />
@@ -150,6 +229,7 @@
                                 <MenuItem Header="_Repositorio en GitHub" Click="Repositorio_Click" />
                                 <MenuItem Header="_Informar un problema…" Click="InformarProblema_Click" />
                                 <Separator />
+                                <MenuItem Header="_Buscar actualizaciones" Click="BuscarActualizaciones_Click" />
                                 <MenuItem Header="_Acerca de MD Codex" Click="AcercaDe_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
@@ -210,6 +290,8 @@
                     <ToggleButton x:Name="ActividadConfiguracion" DockPanel.Dock="Bottom" Style="{StaticResource BotonActividad}"
                                   Command="{x:Static local:Comandos.VerConfiguracion}" Content="&#xE713;" ToolTip="Configuración (Ctrl+,)" />
                     <StackPanel>
+                        <ToggleButton x:Name="ActividadDocumentos" Style="{StaticResource BotonActividad}" Tag="Documentos"
+                                      Click="Actividad_Click" Content="&#xE7C3;" ToolTip="Documentos (Ctrl+Mayús+D)" />
                         <ToggleButton x:Name="ActividadExplorador" Style="{StaticResource BotonActividad}" Tag="Explorador"
                                       Click="Actividad_Click" Content="&#xE8B7;" ToolTip="Espacios de trabajo (Ctrl+Mayús+E)" />
                         <ToggleButton x:Name="ActividadEsquema" Style="{StaticResource BotonActividad}" Tag="Esquema"
@@ -287,6 +369,7 @@
                         <DockPanel x:Name="PanelExplorador">
                             <!-- Sin desplazamiento horizontal: los nombres largos se cortan con "…" antes del margen derecho -->
                             <TreeView x:Name="Arbol" Background="Transparent" BorderThickness="0" Padding="6,0,12,0"
+                                      ItemContainerStyle="{StaticResource EstiloNodo}" ItemTemplate="{StaticResource PlantillaNodo}"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                       PreviewMouseLeftButtonUp="Arbol_PreviewMouseLeftButtonUp" KeyDown="Arbol_KeyDown"
                                       MouseDoubleClick="Arbol_MouseDoubleClick"
@@ -306,83 +389,6 @@
                                         <MenuItem x:Name="MenuEliminarEspacio" Header="Eliminar espacio de trabajo" Click="EliminarEspacio_Click" />
                                     </ContextMenu>
                                 </TreeView.ContextMenu>
-                                <TreeView.ItemContainerStyle>
-                                    <!-- Plantilla propia: la estándar da al encabezado ancho ilimitado y los nombres
-                                         largos se cortan en seco en vez de terminar en "…" -->
-                                    <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                                        <Setter Property="IsExpanded" Value="{Binding Expandido, Mode=TwoWay}" />
-                                        <Setter Property="Padding" Value="2,3" />
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="TreeViewItem">
-                                                    <StackPanel>
-                                                        <Border x:Name="Fila" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                            <DockPanel>
-                                                                <ToggleButton x:Name="Flecha" DockPanel.Dock="Left" Width="20" Focusable="False"
-                                                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
-                                                                    <ToggleButton.Template>
-                                                                        <ControlTemplate TargetType="ToggleButton">
-                                                                            <Border Background="Transparent">
-                                                                                <TextBlock x:Name="Icono" Text="&#xE76C;" FontFamily="{StaticResource Iconos}" FontSize="9"
-                                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                                           Foreground="{DynamicResource Chrome.Tenue}" />
-                                                                            </Border>
-                                                                            <ControlTemplate.Triggers>
-                                                                                <Trigger Property="IsChecked" Value="True">
-                                                                                    <Setter TargetName="Icono" Property="Text" Value="&#xE70D;" />
-                                                                                </Trigger>
-                                                                            </ControlTemplate.Triggers>
-                                                                        </ControlTemplate>
-                                                                    </ToggleButton.Template>
-                                                                </ToggleButton>
-                                                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
-                                                            </DockPanel>
-                                                        </Border>
-                                                        <!-- ClipToBounds: al animar la altura, lo que no cabe se recorta en vez de desbordar -->
-                                                        <ItemsPresenter x:Name="Hijos" Margin="16,0,0,0" Visibility="Collapsed" ClipToBounds="True" />
-                                                    </StackPanel>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsExpanded" Value="True">
-                                                            <Setter TargetName="Hijos" Property="Visibility" Value="Visible" />
-                                                        </Trigger>
-                                                        <Trigger Property="HasItems" Value="False">
-                                                            <Setter TargetName="Flecha" Property="Visibility" Value="Hidden" />
-                                                        </Trigger>
-                                                        <Trigger SourceName="Fila" Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Fila" Property="Background" Value="{DynamicResource Chrome.Hover}" />
-                                                        </Trigger>
-                                                        <Trigger Property="IsSelected" Value="True">
-                                                            <Setter TargetName="Fila" Property="Background" Value="{DynamicResource Chrome.Activo}" />
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </TreeView.ItemContainerStyle>
-                                <TreeView.ItemTemplate>
-                                    <HierarchicalDataTemplate DataType="{x:Type local:NodoArchivo}" ItemsSource="{Binding Hijos}">
-                                        <!-- DockPanel y no StackPanel horizontal: así el nombre recibe el ancho que queda y puede cortarse -->
-                                        <DockPanel>
-                                            <TextBlock DockPanel.Dock="Left" Text="{Binding Icono}" FontFamily="{StaticResource Iconos}" FontSize="13"
-                                                       Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{DynamicResource Chrome.Tenue}" />
-                                            <TextBlock x:Name="Nombre" Text="{Binding Nombre}" FontSize="13" VerticalAlignment="Center"
-                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Ruta}" />
-                                        </DockPanel>
-                                        <HierarchicalDataTemplate.Triggers>
-                                            <DataTrigger Binding="{Binding EsEspacio}" Value="True">
-                                                <Setter TargetName="Nombre" Property="FontWeight" Value="Bold" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding EsSeccion}" Value="True">
-                                                <Setter TargetName="Nombre" Property="FontWeight" Value="Bold" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding EsActual}" Value="True">
-                                                <Setter TargetName="Nombre" Property="Foreground" Value="{DynamicResource Acento}" />
-                                                <Setter TargetName="Nombre" Property="FontWeight" Value="SemiBold" />
-                                            </DataTrigger>
-                                        </HierarchicalDataTemplate.Triggers>
-                                    </HierarchicalDataTemplate>
-                                </TreeView.ItemTemplate>
                             </TreeView>
                         </DockPanel>
                         <ListBox x:Name="ListaEsquema" Background="Transparent" BorderThickness="0" Padding="6,0"
@@ -401,6 +407,18 @@
                         </ListBox>
                         <TextBlock x:Name="EsquemaVacio" Text="El documento no tiene títulos." Margin="20,4,16,0"
                                    TextWrapping="Wrap" Foreground="{DynamicResource Chrome.Tenue}" />
+                        <!-- Documentos: abiertos fuera de los espacios de trabajo, y recientes -->
+                        <DockPanel x:Name="PanelDocumentos" Visibility="Collapsed">
+                            <TextBlock x:Name="DocumentosVacio" DockPanel.Dock="Top" Margin="20,4,16,0" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Chrome.Tenue}"
+                                       Text="Aquí aparecen los documentos abiertos que no están en un espacio de trabajo y los recientes." />
+                            <TreeView x:Name="ArbolDocumentos" Background="Transparent" BorderThickness="0" Padding="6,0,12,0"
+                                      ItemContainerStyle="{StaticResource EstiloNodo}" ItemTemplate="{StaticResource PlantillaNodo}"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      PreviewMouseLeftButtonUp="Arbol_PreviewMouseLeftButtonUp" KeyDown="Arbol_KeyDown"
+                                      MouseDoubleClick="Arbol_MouseDoubleClick"
+                                      TreeViewItem.Expanded="Arbol_Expandido" TreeViewItem.Collapsed="Arbol_Plegado" />
+                        </DockPanel>
                     </Grid>
                 </DockPanel>
                 </Border>
@@ -560,7 +578,7 @@
                                         <TextBlock Text="Editor por bloques" />
                                     </StackPanel>
                                 </RadioButton>
-                                <RadioButton GroupName="Categoria" Tag="SeccionImagenes" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
+                                <RadioButton x:Name="CategoriaImagenes" GroupName="Categoria" Tag="SeccionImagenes" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#xEB9F;" Style="{StaticResource IconoCategoria}" />
                                         <TextBlock Text="Imágenes" />
@@ -576,7 +594,7 @@
                                         Content="&#xE8BB;" Click="CerrarConfiguracion_Click" ToolTip="Cerrar (Esc)" />
                                 <TextBlock x:Name="TituloCategoria" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
                             </DockPanel>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
                                 <Grid Margin="28,8,28,28" MaxWidth="520" HorizontalAlignment="Left">
                                     <StackPanel x:Name="SeccionGeneral">
                                         <TextBlock Text="Tema" FontSize="13" />
@@ -616,6 +634,12 @@
                                                 <TextBlock Style="{StaticResource ExplicacionConfiguracion}" Text="Avisa cuando hay una versión nueva en GitHub." />
                                             </StackPanel>
                                         </DockPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                            <Button x:Name="BotonBuscarActualizaciones" Style="{StaticResource BotonSecundario}"
+                                                    Content="Buscar ahora" Click="BuscarActualizaciones_Click" />
+                                            <TextBlock x:Name="ResultadoBusqueda" Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
+                                                       TextWrapping="Wrap" MaxWidth="360" Foreground="{DynamicResource Chrome.Tenue}" />
+                                        </StackPanel>
                                     </StackPanel>
 
                                     <StackPanel x:Name="SeccionEditor" Visibility="Collapsed">
@@ -672,12 +696,18 @@
                                     </StackPanel>
 
                                     <StackPanel x:Name="SeccionImagenes" Visibility="Collapsed">
-                                        <TextBlock Text="Carpeta de las imágenes pegadas" FontSize="13" />
+                                        <TextBlock Text="Carpeta de las imágenes" FontSize="13" />
                                         <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
-                                                   Text="Junto a cada documento, al pegar o arrastrar imágenes en el editor por bloques. Se aplica con Enter o al salir de la caja." />
-                                        <TextBox x:Name="CajaCarpetaImagenes" FontSize="13" Height="30" Padding="6,0" Margin="0,6,0,0" Width="280"
-                                                 HorizontalAlignment="Left" VerticalContentAlignment="Center" KeyDown="CajaCarpetaImagenes_KeyDown"
-                                                 LostKeyboardFocus="CajaCarpetaImagenes_LostKeyboardFocus" />
+                                                   Text="Las imágenes que pegas o arrastras en el editor por bloques se copian aquí y el documento las enlaza. Si la carpeta no existe, se crea." />
+                                        <TextBox x:Name="CajaCarpetaImagenes" Style="{StaticResource CajaConfiguracion}" Margin="0,8,0,0"
+                                                 KeyDown="CajaCarpetaImagenes_KeyDown" LostKeyboardFocus="CajaCarpetaImagenes_LostKeyboardFocus"
+                                                 ToolTip="Ruta completa, o solo un nombre (por ejemplo, imagenes) para una carpeta junto a cada documento" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button Style="{StaticResource BotonSecundario}" Content="Seleccionar carpeta…" Click="SeleccionarCarpetaImagenes_Click" />
+                                            <Button Style="{StaticResource BotonSecundario}" Content="Usar la predeterminada" Margin="8,0,0,0"
+                                                    Click="CarpetaImagenesPredeterminada_Click" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="DetalleCarpetaImagenes" Style="{StaticResource ExplicacionConfiguracion}" Margin="0,10,0,0" />
                                     </StackPanel>
                                 </Grid>
                             </ScrollViewer>

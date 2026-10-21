@@ -27,26 +27,61 @@ public sealed class Configuracion
     public bool AjustarLineas { get; set; } = true;
     public bool NumerosLinea { get; set; } = true;
     public bool ResaltarLinea { get; set; } = true;
-    public GuardadoAutomatico GuardadoAutomatico { get; set; } = GuardadoAutomatico.Desactivado;
+    public GuardadoAutomatico GuardadoAutomatico { get; set; } = GuardadoAutomatico.AlDejarDeEscribir;
 
     // Vista previa y editor por bloques
     public Ancho AnchoVista { get; set; } = Ancho.Compacto;
     public bool SincronizarDesplazamiento { get; set; } = true;
     public Ancho AnchoBloques { get; set; } = Ancho.Compacto;
 
-    // Imágenes
+    // Imágenes: una carpeta fija (ruta completa) o, si es solo un nombre, una carpeta junto a cada documento.
     public string CarpetaImagenes { get; set; } = CarpetaImagenesPorDefecto;
 
     // Zoom de lo que se está viendo (editor, vista o bloques), desde la barra de estado.
     public double Zoom { get; set; } = 1;
 
-    public const string CarpetaImagenesPorDefecto = "imagenes";
+    // Para ajustar una sola vez lo guardado por versiones anteriores (ver Migrar).
+    public int Version { get; set; }
+    private const int VersionActual = 2;
 
-    // Nombre de carpeta usable bajo la del documento: sin rutas absolutas, sin salir con "..", sin caracteres
-    // inválidos. Acepta subcarpetas ("recursos/img"). Si no sirve, la de siempre.
+    // Imágenes del usuario\md-codex.
+    public static string CarpetaImagenesPorDefecto { get; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "md-codex");
+
+    // La 1.3.4 guardó los valores por omisión de entonces: el guardado automático desactivado y la carpeta
+    // "imagenes" junto a cada documento. Se llevan a los nuevos una vez; lo que el usuario cambió se respeta.
+    public bool Migrar()
+    {
+        if (Version >= VersionActual)
+            return false;
+        if (Version < 2)
+        {
+            if (GuardadoAutomatico == GuardadoAutomatico.Desactivado)
+                GuardadoAutomatico = GuardadoAutomatico.AlDejarDeEscribir;
+            if (CarpetaImagenes == "imagenes")
+                CarpetaImagenes = CarpetaImagenesPorDefecto;
+        }
+        Version = VersionActual;
+        return true;
+    }
+
+    // Una ruta completa se normaliza tal cual. Un nombre se toma relativo al documento: sin salir con "..",
+    // sin caracteres inválidos, y acepta subcarpetas ("recursos/img"). Si no sirve, la predeterminada.
     public static string CarpetaValida(string? nombre)
     {
-        var partes = (nombre ?? "").Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        nombre = nombre?.Trim() ?? "";
+        if (Path.IsPathFullyQualified(nombre))
+        {
+            try
+            {
+                return Path.TrimEndingDirectorySeparator(Path.GetFullPath(nombre));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return CarpetaImagenesPorDefecto;
+            }
+        }
+        var partes = nombre.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (partes.Length == 0 || partes.Any(p => p is "." or ".." || p.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
             return CarpetaImagenesPorDefecto;
         return string.Join('/', partes);
