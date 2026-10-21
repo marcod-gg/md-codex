@@ -2108,6 +2108,26 @@ public partial class MainWindow : Window
             item.IsSelected = true;
     }
 
+    // En Documentos, el menú es solo para los documentos (no para los encabezados Abiertos y Recientes).
+    private void ArbolDocumentos_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (_nodoMenu is not { EsGrupo: false })
+            e.Handled = true;
+    }
+
+    // Muestra la carpeta en el Explorador de Windows; un archivo, con su carpeta abierta y el archivo seleccionado.
+    private void AbrirEnExplorador_Click(object sender, RoutedEventArgs e)
+    {
+        if (_nodoMenu is not { EsEspacio: false, EsGrupo: false } nodo)
+            return;
+        if (nodo.EsCarpeta ? !Directory.Exists(nodo.Ruta) : !File.Exists(nodo.Ruta))
+        {
+            Avisar($"{nodo.Ruta} ya no existe.");
+            return;
+        }
+        Process.Start("explorer.exe", nodo.EsCarpeta ? $"\"{nodo.Ruta}\"" : $"/select,\"{nodo.Ruta}\"");
+    }
+
     private void Arbol_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         // Documentos no es un lugar del disco ni un espacio de trabajo: sin menú.
@@ -2116,6 +2136,7 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+        MenuAbrirExplorador.IsEnabled = _nodoMenu is { EsEspacio: false };
         MenuNuevoArchivoArbol.IsEnabled = CarpetaDestino(_nodoMenu) is not null;
         MenuQuitarCarpeta.IsEnabled = _nodoMenu is { EsEspacio: false };
         MenuRenombrarEspacio.IsEnabled = _nodoMenu is not null;

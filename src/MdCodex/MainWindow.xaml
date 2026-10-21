@@ -399,6 +399,8 @@
                                       TreeViewItem.Expanded="Arbol_Expandido" TreeViewItem.Collapsed="Arbol_Plegado">
                                 <TreeView.ContextMenu>
                                     <ContextMenu>
+                                        <MenuItem x:Name="MenuAbrirExplorador" Header="Abrir en el Explorador" Click="AbrirEnExplorador_Click" />
+                                        <Separator />
                                         <MenuItem x:Name="MenuNuevoArchivoArbol" Header="Nuevo archivo…" Click="NuevoArchivo_Click" />
                                         <MenuItem Header="Agregar carpeta…" Click="AgregarCarpeta_Click" />
                                         <MenuItem x:Name="MenuQuitarCarpeta" Header="Quitar carpeta del espacio de trabajo" Click="QuitarCarpeta_Click" />
@@ -440,7 +442,15 @@
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                       PreviewMouseLeftButtonUp="Arbol_PreviewMouseLeftButtonUp" KeyDown="Arbol_KeyDown"
                                       MouseDoubleClick="Arbol_MouseDoubleClick"
-                                      TreeViewItem.Expanded="Arbol_Expandido" TreeViewItem.Collapsed="Arbol_Plegado" />
+                                      PreviewMouseRightButtonDown="Arbol_PreviewMouseRightButtonDown"
+                                      ContextMenuOpening="ArbolDocumentos_ContextMenuOpening"
+                                      TreeViewItem.Expanded="Arbol_Expandido" TreeViewItem.Collapsed="Arbol_Plegado">
+                                <TreeView.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Abrir en el Explorador" Click="AbrirEnExplorador_Click" />
+                                    </ContextMenu>
+                                </TreeView.ContextMenu>
+                            </TreeView>
                         </DockPanel>
                     </Grid>
                 </DockPanel>
