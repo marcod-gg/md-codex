@@ -124,7 +124,8 @@ public partial class MainWindow : Window
 
         Tema.Preferido = Config.Tema;
         Imagenes.Carpeta = Config.CarpetaImagenes;
-        NodoArchivo.MostrarRutas = MenuMostrarRutas.IsChecked = Config.MostrarRutasCarpetas;
+        NodoArchivo.MostrarRutas = Config.MostrarRutasCarpetas;
+        MarcarMenuVer();
         MostrarConfiguracion();
         AplicarEditor();
         AplicarZoom();
@@ -1447,17 +1448,36 @@ public partial class MainWindow : Window
 
     // ---------- Barra lateral ----------
 
+    // Con el atajo (o el ícono), una herramienta oculta en Ver vuelve a mostrarse.
     private void MostrarPanel(Panel panel)
     {
+        if (!HerramientaVisible(panel))
+            CambiarHerramienta(panel, true);
         _panel = panel;
         _lateralDesplegado = true;
         AplicarLateral();
     }
 
+    // Ver → Documentos / Espacios de trabajo / Esquema: si esa herramienta se muestra en la barra lateral.
+    private bool HerramientaVisible(Panel panel) => panel switch
+    {
+        Panel.Documentos => Config.MostrarDocumentos,
+        Panel.Explorador => Config.MostrarEspacios,
+        _ => Config.MostrarEsquema,
+    };
+
     private void AplicarLateral()
     {
-        var fija = _recientes.LateralFijo;
-        var visible = fija || _lateralDesplegado;
+        // Si la herramienta elegida está oculta, se muestra la primera que no lo esté; sin ninguna, no hay barra.
+        var visibles = Enum.GetValues<Panel>().Where(HerramientaVisible).ToList();
+        if (visibles.Count > 0 && !visibles.Contains(_panel))
+            _panel = visibles[0];
+        ActividadDocumentos.Visibility = Visible(Config.MostrarDocumentos);
+        ActividadExplorador.Visibility = Visible(Config.MostrarEspacios);
+        ActividadEsquema.Visibility = Visible(Config.MostrarEsquema);
+
+        var fija = _recientes.LateralFijo && visibles.Count > 0;
+        var visible = visibles.Count > 0 && (fija || _lateralDesplegado);
         // Solo la barra fija ocupa la columna; su ancho (ajustable con el divisor) se reusa al desplegarla.
         if (ColumnaLateral.ActualWidth > 0)
             _anchoLateral = ColumnaLateral.ActualWidth;
@@ -2463,12 +2483,35 @@ public partial class MainWindow : Window
 
     private void VerDocumentos_Executed(object sender, ExecutedRoutedEventArgs e) => MostrarPanel(Panel.Documentos);
 
-    // Ver → Mostrar la ruta de las carpetas: el árbol se rehace con o sin la ruta junto al nombre.
-    private void MostrarRutas_Click(object sender, RoutedEventArgs e)
+    // Ver → Documentos / Espacios de trabajo / Esquema: muestra u oculta esa herramienta. Al mostrarla, se abre.
+    private void Herramienta_Click(object sender, RoutedEventArgs e)
     {
-        Config.MostrarRutasCarpetas = NodoArchivo.MostrarRutas = MenuMostrarRutas.IsChecked;
+        var item = (MenuItem)sender;
+        var panel = item == MenuVerDocumentos ? Panel.Documentos : item == MenuVerEspacios ? Panel.Explorador : Panel.Esquema;
+        CambiarHerramienta(panel, item.IsChecked);
+        if (item.IsChecked)
+            MostrarPanel(panel);
+        else
+            AplicarLateral();
+    }
+
+    private void CambiarHerramienta(Panel panel, bool mostrar)
+    {
+        switch (panel)
+        {
+            case Panel.Documentos: Config.MostrarDocumentos = mostrar; break;
+            case Panel.Explorador: Config.MostrarEspacios = mostrar; break;
+            default: Config.MostrarEsquema = mostrar; break;
+        }
         _recientes.Guardar();
-        RefrescarArbol();
+        MarcarMenuVer();
+    }
+
+    private void MarcarMenuVer()
+    {
+        MenuVerDocumentos.IsChecked = Config.MostrarDocumentos;
+        MenuVerEspacios.IsChecked = Config.MostrarEspacios;
+        MenuVerEsquema.IsChecked = Config.MostrarEsquema;
     }
 
     // Ctrl+, o el engranaje: abre la ventana de configuración, o la cierra si ya está abierta.
@@ -2518,7 +2561,7 @@ public partial class MainWindow : Window
     private void Categoria_Checked(object sender, RoutedEventArgs e)
     {
         var categoria = (RadioButton)sender;
-        foreach (var seccion in new[] { SeccionGeneral, SeccionEditor, SeccionVista, SeccionBloques, SeccionImagenes })
+        foreach (var seccion in new[] { SeccionGeneral, SeccionEditor, SeccionEspacios, SeccionVista, SeccionBloques, SeccionImagenes })
             seccion.Visibility = Visible(seccion.Name == (string)categoria.Tag);
         TituloCategoria.Text = ((TextBlock)((StackPanel)categoria.Content).Children[1]).Text;
     }
@@ -2539,6 +2582,7 @@ public partial class MainWindow : Window
         OpcionNumerosLinea.IsChecked = Config.NumerosLinea;
         OpcionResaltarLinea.IsChecked = Config.ResaltarLinea;
         OpcionSincronizarDesplazamiento.IsChecked = Config.SincronizarDesplazamiento;
+        OpcionMostrarRutas.IsChecked = Config.MostrarRutasCarpetas;
         CajaCarpetaImagenes.Text = Config.CarpetaImagenes;
         ResultadoBusqueda.Text = "";
         _mostrandoConfiguracion = false;
@@ -2557,6 +2601,10 @@ public partial class MainWindow : Window
             case nameof(OpcionSincronizarDesplazamiento):
                 Config.SincronizarDesplazamiento = activo;
                 SincronizarScroll();
+                break;
+            case nameof(OpcionMostrarRutas):
+                Config.MostrarRutasCarpetas = NodoArchivo.MostrarRutas = activo;
+                RefrescarArbol(); // el árbol se rehace con o sin la ruta junto al nombre
                 break;
         }
         _recientes.Guardar();

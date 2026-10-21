@@ -230,11 +230,10 @@
                         <MenuItem Header="_Editor" Command="{x:Static local:Comandos.ModoEditor}" InputGestureText="Ctrl+3" />
                         <MenuItem Header="_Pro (por bloques)" Command="{x:Static local:Comandos.ModoPro}" InputGestureText="Ctrl+4" />
                         <Separator />
-                        <MenuItem Header="_Documentos" Command="{x:Static local:Comandos.VerDocumentos}" InputGestureText="Ctrl+Mayús+D" />
-                        <MenuItem Header="Espacios de _trabajo" Command="{x:Static local:Comandos.VerExplorador}" InputGestureText="Ctrl+Mayús+E" />
-                        <MenuItem Header="E_squema" Command="{x:Static local:Comandos.VerEsquema}" InputGestureText="Ctrl+Mayús+O" />
-                        <MenuItem x:Name="MenuMostrarRutas" Header="Mostrar la _ruta de las carpetas" IsCheckable="True"
-                                  Click="MostrarRutas_Click" />
+                        <!-- Herramientas de la barra lateral: marcadas, se ven (su ícono y su panel) -->
+                        <MenuItem x:Name="MenuVerDocumentos" Header="_Documentos" IsCheckable="True" Click="Herramienta_Click" />
+                        <MenuItem x:Name="MenuVerEspacios" Header="Espacios de _trabajo" IsCheckable="True" Click="Herramienta_Click" />
+                        <MenuItem x:Name="MenuVerEsquema" Header="E_squema" IsCheckable="True" Click="Herramienta_Click" />
                         <MenuItem Header="_Configuración" Command="{x:Static local:Comandos.VerConfiguracion}" InputGestureText="Ctrl+," />
                         <Separator />
                         <MenuItem Header="Pestaña _siguiente" Command="{x:Static local:Comandos.PestanaSiguiente}" InputGestureText="Ctrl+Tab" />
@@ -599,6 +598,12 @@
                                         <TextBlock Text="Editor de texto" />
                                     </StackPanel>
                                 </RadioButton>
+                                <RadioButton GroupName="Categoria" Tag="SeccionEspacios" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8B7;" Style="{StaticResource IconoCategoria}" />
+                                        <TextBlock Text="Espacios de trabajo" />
+                                    </StackPanel>
+                                </RadioButton>
                                 <RadioButton GroupName="Categoria" Tag="SeccionVista" Style="{StaticResource CategoriaConfiguracion}" Checked="Categoria_Checked">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#xE890;" Style="{StaticResource IconoCategoria}" />
@@ -702,6 +707,18 @@
                                             <ComboBoxItem Tag="AlCambiar" Content="Al cambiar de pestaña o de ventana" />
                                             <ComboBoxItem Tag="AlDejarDeEscribir" Content="Al dejar de escribir" />
                                         </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SeccionEspacios" Visibility="Collapsed">
+                                        <DockPanel>
+                                            <CheckBox x:Name="OpcionMostrarRutas" DockPanel.Dock="Right" Style="{StaticResource Interruptor}"
+                                                      VerticalAlignment="Top" Margin="16,1,0,0" Click="Interruptor_Click" ToolTip="Mostrar la ruta de las carpetas" />
+                                            <StackPanel>
+                                                <TextBlock Text="Mostrar la ruta de las carpetas" FontSize="13" />
+                                                <TextBlock Style="{StaticResource ExplicacionConfiguracion}"
+                                                           Text="Cada carpeta agregada a un espacio de trabajo muestra su ruta junto al nombre." />
+                                            </StackPanel>
+                                        </DockPanel>
                                     </StackPanel>
 
                                     <StackPanel x:Name="SeccionVista" Visibility="Collapsed">
