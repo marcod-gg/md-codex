@@ -85,6 +85,11 @@ public partial class MainWindow : Window
 
         BarraPestanas.ItemsSource = _pestanas;
         _pestanas.CollectionChanged += (_, _) => ActualizarDocumentos();
+        ArbolDocumentos.MouseLeave += (_, _) =>
+        {
+            if (_documentosPendientes)
+                ActualizarDocumentos();
+        };
         Editor.Document = _sinDocumento;
         _demoraDocumento = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
         _demoraDocumento.Tick += (_, _) => ActualizarDocumento();
@@ -1241,9 +1246,21 @@ public partial class MainWindow : Window
     // Panel Documentos: los abiertos que no están en ningún espacio de trabajo y los recientes, agrupados.
     // Se rehace solo (sin tocar el árbol de espacios) al abrir o cerrar pestañas y al cambiar los recientes.
     private readonly NodoArchivo _documentos = NodoArchivo.DeDocumentos();
+    // Cambios que esperan a que el mouse salga del panel (ver ActualizarDocumentos).
+    private bool _documentosPendientes;
 
     private void ActualizarDocumentos()
     {
+        // Abrir un documento lo sube en Recientes. Si el panel se rehiciera bajo el mouse, el segundo clic de
+        // un doble clic caería en otra fila (u otro documento) y la pestaña quedaría temporal: se espera a que
+        // el mouse salga del panel.
+        if (ArbolDocumentos.IsMouseOver)
+        {
+            _documentosPendientes = true;
+            RevelarActual();
+            return;
+        }
+        _documentosPendientes = false;
         var abiertos = _pestanas.Where(p => p.Ruta is not null && RaizDe(p.Ruta) is null).Select(p => p.Ruta!);
         _documentos.LlenarDocumentos(abiertos, _recientes.Archivos);
         ArbolDocumentos.ItemsSource ??= _documentos.Hijos;

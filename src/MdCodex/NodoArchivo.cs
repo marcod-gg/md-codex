@@ -54,6 +54,18 @@ public sealed class NodoArchivo : INotifyPropertyChanged
     // Rehace los grupos: "Abiertos" (sin espacio de trabajo) solo si hay alguno; "Recientes" siempre que haya.
     public void LlenarDocumentos(IEnumerable<string> abiertos, IEnumerable<string> recientes)
     {
+        // Si nada cambió, no se rehace (se conservan la selección y el desplazamiento).
+        var listaAbiertos = abiertos.ToList();
+        var listaRecientes = recientes.ToList();
+        bool Igual(string grupo, List<string> rutas) =>
+            Hijos.FirstOrDefault(h => h.Nombre == grupo) is { } g
+                ? g.Hijos.Select(n => n.Ruta).SequenceEqual(rutas, StringComparer.OrdinalIgnoreCase)
+                : rutas.Count == 0;
+        if (Igual("Abiertos", listaAbiertos) && Igual("Recientes", listaRecientes))
+            return;
+        abiertos = listaAbiertos;
+        recientes = listaRecientes;
+
         var expandidos = Hijos.Where(h => h.EsGrupo).ToDictionary(h => h.Nombre, h => h.Expandido);
         Hijos.Clear();
         void Agregar(string nombre, string icono, IEnumerable<string> rutas)
