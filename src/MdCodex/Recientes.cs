@@ -19,6 +19,8 @@ public sealed class Recientes
     public List<string> Archivos { get; set; } = [];
     public List<string> Carpetas { get; set; } = [];
     public Sesion? UltimaSesion { get; set; }
+    // Preferencia de la barra lateral: fija (siempre abierta) o automática (se despliega al tocar un ícono).
+    public bool LateralFijo { get; set; } = true;
 
     // Un archivo dañado o ilegible no impide abrir la app: se empieza sin recientes.
     public static Recientes Cargar()

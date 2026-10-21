@@ -12,7 +12,7 @@ Visor y editor de archivos Markdown para Windows, hecho con WPF (.NET 10), WebVi
 - Editor con resaltado de Markdown y números de línea. Nuevo (Ctrl+N), Guardar (Ctrl+S), Guardar como (Ctrl+Mayús+S), negrita (Ctrl+B) y cursiva (Ctrl+I).
 - Avisa antes de cerrar o abrir otro archivo si hay cambios sin guardar, y conserva la codificación original al guardar.
 - Si el archivo cambia fuera de la app, se recarga solo; si tienes cambios pendientes, pregunta primero. **F5** recarga desde el disco.
-- Interfaz al estilo de VS Code: menús y controles en la barra de título, barra de actividad con **Explorador** (Ctrl+Mayús+E) y **Esquema** de títulos (Ctrl+Mayús+O), y barra de estado con posición, palabras, codificación y fin de línea. Ctrl+Mayús+B muestra u oculta la barra lateral.
+- Interfaz al estilo de VS Code: menús y controles en la barra de título, barra de actividad con **Explorador** (Ctrl+Mayús+E) y **Esquema** de títulos (Ctrl+Mayús+O), y barra de estado con posición, palabras, codificación y fin de línea. El botón al pie de la barra de actividad (o Ctrl+Mayús+B) deja la barra lateral **fija** o **automática**: oculta hasta tocar un ícono, se despliega sobre el documento y se vuelve a ocultar al hacer clic fuera.
 - **Pestañas**: cada documento en su pestaña, con su propio deshacer, cursor y scroll. Un clic en el Explorador abre una pestaña temporal (en cursiva) que se fija al editar o con doble clic. Ctrl+W cierra, Ctrl+Tab / Ctrl+Mayús+Tab cambian de pestaña, clic central cierra y el clic derecho ofrece más opciones.
 - **Ctrl+F** busca dentro del editor. Arrastrar una carpeta a la ventana la abre en el Explorador.
 - Sigue el tema claro u oscuro de Windows.

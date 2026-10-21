@@ -126,7 +126,6 @@
                         <Separator />
                         <MenuItem Header="E_xplorador" Command="{x:Static local:Comandos.VerExplorador}" InputGestureText="Ctrl+Mayús+E" />
                         <MenuItem Header="E_squema" Command="{x:Static local:Comandos.VerEsquema}" InputGestureText="Ctrl+Mayús+O" />
-                        <MenuItem Header="_Barra lateral" Command="{x:Static local:Comandos.AlternarLateral}" InputGestureText="Ctrl+Mayús+B" />
                         <Separator />
                         <MenuItem Header="Pestaña _siguiente" Command="{x:Static local:Comandos.PestanaSiguiente}" InputGestureText="Ctrl+Tab" />
                         <MenuItem Header="Pestaña _anterior" Command="{x:Static local:Comandos.PestanaAnterior}" InputGestureText="Ctrl+Mayús+Tab" />
@@ -151,12 +150,6 @@
                            Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}" />
 
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
-                    <ToggleButton x:Name="BotonLateral" Style="{StaticResource AlternarIcono}"
-                                  Command="{x:Static local:Comandos.AlternarLateral}" ToolTip="Barra lateral (Ctrl+Mayús+B)">
-                        <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
-                              StrokeThickness="1" Data="M1.5,2.5 H14.5 V13.5 H1.5 Z M5.5,2.5 V13.5" Width="16" Height="16" />
-                    </ToggleButton>
-                    <Rectangle Width="1" Height="16" Margin="6,0" Fill="{DynamicResource Chrome.Borde}" />
                     <RadioButton x:Name="BotonVista" GroupName="Modo" Style="{StaticResource AlternarIcono}"
                                  Tag="Vista" Checked="BotonModo_Checked" Content="&#xE890;" ToolTip="Vista (Ctrl+1)" />
                     <RadioButton x:Name="BotonDividido" GroupName="Modo" Style="{StaticResource AlternarIcono}" Margin="2,0"
@@ -190,17 +183,30 @@
                     <ColumnDefinition Width="*" MinWidth="240" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Barra de actividad -->
-                <StackPanel Grid.Column="0">
-                    <ToggleButton x:Name="ActividadExplorador" Style="{StaticResource BotonActividad}" Tag="Explorador"
-                                  Click="Actividad_Click" Content="&#xE8B7;" ToolTip="Explorador (Ctrl+Mayús+E)" />
-                    <ToggleButton x:Name="ActividadEsquema" Style="{StaticResource BotonActividad}" Tag="Esquema"
-                                  Click="Actividad_Click" Content="&#xE8FD;" ToolTip="Esquema (Ctrl+Mayús+O)" />
-                </StackPanel>
+                <!-- Barra de actividad; abajo, fijar la barra lateral o dejarla automática -->
+                <!-- Por encima de la barra lateral (y opaca), para que esta se esconda debajo al deslizarse -->
+                <DockPanel x:Name="BarraActividad" Grid.Column="0" Panel.ZIndex="2" Background="{DynamicResource Chrome.Fondo}">
+                    <ToggleButton x:Name="BotonFijarLateral" DockPanel.Dock="Bottom" Style="{StaticResource AlternarIcono}"
+                                  Width="36" Height="36" Margin="0,0,0,8" HorizontalAlignment="Center"
+                                  Command="{x:Static local:Comandos.AlternarLateral}">
+                        <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                              StrokeThickness="1" Data="M1.5,2.5 H14.5 V13.5 H1.5 Z M5.5,2.5 V13.5" Width="16" Height="16" />
+                    </ToggleButton>
+                    <StackPanel>
+                        <ToggleButton x:Name="ActividadExplorador" Style="{StaticResource BotonActividad}" Tag="Explorador"
+                                      Click="Actividad_Click" Content="&#xE8B7;" ToolTip="Explorador (Ctrl+Mayús+E)" />
+                        <ToggleButton x:Name="ActividadEsquema" Style="{StaticResource BotonActividad}" Tag="Esquema"
+                                      Click="Actividad_Click" Content="&#xE8FD;" ToolTip="Esquema (Ctrl+Mayús+O)" />
+                    </StackPanel>
+                </DockPanel>
 
-                <!-- Barra lateral: panel propio, un tono entre el marco y el área de trabajo -->
-                <Border x:Name="Lateral" Grid.Column="1" Margin="0,0,0,8" CornerRadius="8" BorderThickness="1"
+                <!-- Barra lateral: panel propio, un tono entre el marco y el área de trabajo.
+                     Automática, flota sobre el área de trabajo (ZIndex) en vez de ocupar su columna. -->
+                <Border x:Name="Lateral" Grid.Column="1" Margin="0,0,0,8" CornerRadius="8" BorderThickness="1" Panel.ZIndex="1"
                         Background="{DynamicResource Lateral.Fondo}" BorderBrush="{DynamicResource Chrome.Borde}">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="DesplazamientoLateral" />
+                </Border.RenderTransform>
                 <DockPanel>
                     <Grid DockPanel.Dock="Top" Height="35" Margin="20,0,8,0">
                         <TextBlock x:Name="TituloLateral" Style="{StaticResource EtiquetaTenue}" Text="EXPLORADOR" />

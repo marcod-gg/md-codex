@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Search;
@@ -36,7 +37,10 @@ public partial class MainWindow : Window
     private string? _carpetaRaiz;
     private Modo _modo = Modo.Vista;
     private Panel _panel = Panel.Explorador;
-    private bool _lateralVisible = true;
+    // Con la barra lateral automática, si está desplegada sobre el área de trabajo.
+    private bool _lateralDesplegado;
+    // Si la barra lateral se muestra (o está apareciendo); al desvanecerse sigue visible un momento.
+    private bool _lateralMostrado = true;
     private double _anchoLateral = 260;
     private IReadOnlyList<Titulo> _titulos = [];
     private bool _vistaLista;
@@ -70,6 +74,7 @@ public partial class MainWindow : Window
         PreviewDragEnter += Ventana_PreviewDragOver;
         PreviewDragOver += Ventana_PreviewDragOver;
         PreviewDrop += Ventana_PreviewDrop;
+        PreviewMouseDown += Ventana_PreviewMouseDown;
         StateChanged += (_, _) => AjustarMaximizado();
         SourceInitialized += (_, _) =>
         {
@@ -918,21 +923,31 @@ public partial class MainWindow : Window
     private void MostrarPanel(Panel panel)
     {
         _panel = panel;
-        _lateralVisible = true;
+        _lateralDesplegado = true;
         AplicarLateral();
     }
 
     private void AplicarLateral()
     {
-        if (Lateral.Visibility == Visibility.Visible && ColumnaLateral.ActualWidth > 0)
+        var fija = _recientes.LateralFijo;
+        var visible = fija || _lateralDesplegado;
+        // Solo la barra fija ocupa la columna; su ancho (ajustable con el divisor) se reusa al desplegarla.
+        if (ColumnaLateral.ActualWidth > 0)
             _anchoLateral = ColumnaLateral.ActualWidth;
 
-        ColumnaLateral.Width = new GridLength(_lateralVisible ? _anchoLateral : 0);
-        Lateral.Visibility = Visible(_lateralVisible);
-        DivisorLateral.Visibility = Lateral.Visibility;
-        BotonLateral.IsChecked = _lateralVisible;
-        ActividadExplorador.IsChecked = _lateralVisible && _panel == Panel.Explorador;
-        ActividadEsquema.IsChecked = _lateralVisible && _panel == Panel.Esquema;
+        ColumnaLateral.Width = new GridLength(fija ? _anchoLateral : 0);
+        Grid.SetColumnSpan(Lateral, fija ? 1 : 3);
+        Lateral.Width = fija ? double.NaN : _anchoLateral;
+        Lateral.HorizontalAlignment = fija ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+        if (visible != _lateralMostrado)
+            DeslizarLateral(visible);
+        DivisorLateral.Visibility = Visible(fija);
+        BotonFijarLateral.IsChecked = fija;
+        BotonFijarLateral.ToolTip = fija
+            ? "Barra lateral fija. Clic para ocultarla hasta tocar un ícono (Ctrl+Mayús+B)"
+            : "Barra lateral automática. Clic para dejarla siempre abierta (Ctrl+Mayús+B)";
+        ActividadExplorador.IsChecked = visible && _panel == Panel.Explorador;
+        ActividadEsquema.IsChecked = visible && _panel == Panel.Esquema;
 
         var explorador = _panel == Panel.Explorador;
         TituloLateral.Text = explorador ? "EXPLORADOR" : "ESQUEMA";
@@ -942,6 +957,40 @@ public partial class MainWindow : Window
         ListaEsquema.Visibility = Visible(!explorador && _titulos.Count > 0);
         EsquemaVacio.Visibility = Visible(!explorador && _titulos.Count == 0);
         EsquemaVacio.Text = _activa is null ? "No hay ningún documento abierto." : "El documento no tiene títulos.";
+    }
+
+    // Entra y sale deslizándose por la izquierda, por debajo de la barra de actividad.
+    // Antes de cargar la ventana, sin animación.
+    private void DeslizarLateral(bool mostrar)
+    {
+        _lateralMostrado = mostrar;
+        // Mientras sale no debe tapar los clics al área de trabajo.
+        Lateral.IsHitTestVisible = mostrar;
+        if (!IsLoaded)
+        {
+            Lateral.Visibility = Visible(mostrar);
+            return;
+        }
+
+        var oculta = -_anchoLateral;
+        var deslizamiento = new DoubleAnimation(mostrar ? 0 : oculta, TimeSpan.FromMilliseconds(200))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        if (mostrar && Lateral.Visibility != Visibility.Visible)
+        {
+            deslizamiento.From = oculta;
+            Lateral.Visibility = Visibility.Visible;
+        }
+        else if (!mostrar)
+        {
+            deslizamiento.Completed += (_, _) =>
+            {
+                if (!_lateralMostrado)
+                    Lateral.Visibility = Visibility.Collapsed;
+            };
+        }
+        DesplazamientoLateral.BeginAnimation(TranslateTransform.XProperty, deslizamiento);
     }
 
     // ---------- Modos y edición ----------
@@ -1195,6 +1244,15 @@ public partial class MainWindow : Window
         return actual as T;
     }
 
+    private static bool Contiene(DependencyObject contenedor, object? origen)
+    {
+        for (var actual = origen as DependencyObject; actual is not null;
+             actual = actual is Visual ? VisualTreeHelper.GetParent(actual) : LogicalTreeHelper.GetParent(actual))
+            if (actual == contenedor)
+                return true;
+        return false;
+    }
+
     private static Pestana? PestanaDe(object sender) => (sender as FrameworkElement)?.DataContext as Pestana;
 
     private void Avisar(string mensaje) =>
@@ -1378,10 +1436,10 @@ public partial class MainWindow : Window
     private void Actividad_Click(object sender, RoutedEventArgs e)
     {
         var panel = Enum.Parse<Panel>((string)((FrameworkElement)sender).Tag);
-        // Como en VS Code: tocar el panel que ya está abierto oculta la barra lateral.
-        if (_lateralVisible && _panel == panel)
+        // Automática: tocar el panel que ya está desplegado la vuelve a ocultar. Fija: queda abierta.
+        if (!_recientes.LateralFijo && _lateralDesplegado && _panel == panel)
         {
-            _lateralVisible = false;
+            _lateralDesplegado = false;
             AplicarLateral();
         }
         else
@@ -1546,7 +1604,18 @@ public partial class MainWindow : Window
 
     private void AlternarLateral_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        _lateralVisible = !_lateralVisible;
+        _recientes.LateralFijo = !_recientes.LateralFijo;
+        _recientes.Guardar();
+        _lateralDesplegado = false;
+        AplicarLateral();
+    }
+
+    // Con la barra lateral automática desplegada, un clic fuera de ella (y de la barra de actividad) la oculta.
+    private void Ventana_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_recientes.LateralFijo || !_lateralDesplegado || Contiene(Lateral, e.OriginalSource) || Contiene(BarraActividad, e.OriginalSource))
+            return;
+        _lateralDesplegado = false;
         AplicarLateral();
     }
 
