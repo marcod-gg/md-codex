@@ -28,7 +28,7 @@ public sealed class Pestana : INotifyPropertyChanged, IDisposable
             if (e.PropertyName != nameof(UndoStack.IsOriginalFile))
                 return;
             if (Modificado)
-                EsTemporal = false; // como en VS Code: editar fija la pestaña
+                EsTemporal = false; // editar fija la pestaña
             Avisar(nameof(Modificado));
         };
         Codificacion = codificacion;

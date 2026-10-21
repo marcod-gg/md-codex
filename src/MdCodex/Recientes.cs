@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace MdCodex;
 
-// Lo que quedó abierto al cerrar, para reabrirlo al iniciar sin archivos (como VS Code).
+// Lo que quedó abierto al cerrar, para reabrirlo al iniciar sin archivos.
 // Carpeta es de las versiones sin espacios de trabajo: solo se lee para crear el primero.
 public sealed record Sesion(string? Carpeta, List<string> Archivos, string? Activo, string Modo);
 

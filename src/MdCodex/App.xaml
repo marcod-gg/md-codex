@@ -213,7 +213,7 @@
             </Setter>
         </Style>
 
-        <!-- Divisores: invisibles hasta pasar el mouse; entonces una línea fina al centro, como en VS Code.
+        <!-- Divisores: invisibles hasta pasar el mouse; entonces una línea fina al centro.
              Toda la franja sigue sirviendo para arrastrar. -->
         <Style x:Key="Divisor" TargetType="GridSplitter">
             <Setter Property="Background" Value="Transparent" />

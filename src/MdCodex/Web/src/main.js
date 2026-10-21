@@ -1,4 +1,4 @@
-// Editor "Pro" de MD Codex: edición por bloques al estilo de Notion sobre Milkdown Crepe.
+// Editor "Pro" de MD Codex: edición por bloques sobre Milkdown Crepe.
 // La app es la dueña del documento: le envía el Markdown a cargar y recibe los cambios.
 import { Crepe } from '@milkdown/crepe';
 import { commandsCtx, editorViewCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core';
