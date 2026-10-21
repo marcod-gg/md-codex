@@ -49,8 +49,12 @@ public partial class MainWindow : Window
     private bool _lateralDesplegado;
     // Si la barra lateral se muestra (o está apareciendo); al desvanecerse sigue visible un momento.
     private bool _lateralMostrado = true;
-    // Página de la release más nueva, si hay una actualización pendiente.
-    private string? _urlActualizacion;
+    // Release más nueva, si hay una actualización pendiente; su instalador, una vez descargado.
+    private Actualizacion.Release? _actualizacion;
+    private string? _instalador;
+    private bool _descargando;
+    // "Reiniciar ahora": al cerrar se instala la actualización y se vuelve a abrir la app.
+    private bool _reabrirTrasActualizar;
     private double _anchoLateral = 280;
     private const double AnchoMinimoLateral = 240;
     private IReadOnlyList<Titulo> _titulos = [];
@@ -118,11 +122,11 @@ public partial class MainWindow : Window
                 RestaurarSesion();
             }
 
-            if (await Marca.BuscarActualizacionAsync() is { } nueva)
+            if (await Actualizacion.BuscarAsync() is { } nueva)
             {
-                _urlActualizacion = nueva.Url;
+                _actualizacion = nueva;
                 TextoActualizacion.Text = $"MD Codex {nueva.Version} está disponible.";
-                EstadoActualizacion.ToolTip = $"MD Codex {nueva.Version} está disponible. Clic para descargarla.";
+                EstadoActualizacion.ToolTip = $"MD Codex {nueva.Version} está disponible. Clic para actualizar.";
                 AvisoActualizacion.Visibility = Visibility.Visible;
                 EstadoActualizacion.Visibility = Visibility.Visible;
             }
@@ -2036,10 +2040,45 @@ public partial class MainWindow : Window
     // El aviso se cierra; "Actualización pendiente" sigue en la barra de estado.
     private void CerrarAviso_Click(object sender, RoutedEventArgs e) => AvisoActualizacion.Visibility = Visibility.Collapsed;
 
-    private void DescargarActualizacion_Click(object sender, RoutedEventArgs e)
+    // Primero descarga el instalador en segundo plano; ya descargado, reinicia la app para instalarlo.
+    private async void Actualizar_Click(object sender, RoutedEventArgs e)
     {
         AvisoActualizacion.Visibility = Visibility.Collapsed;
-        Marca.Abrir(_urlActualizacion!);
+        if (_instalador is not null)
+        {
+            // El cierre normal pide guardar los cambios; si se cancela, OnClosing desmarca el reinicio.
+            _reabrirTrasActualizar = true;
+            Close();
+            return;
+        }
+        if (_actualizacion!.Instalador is null)
+        {
+            Marca.Abrir(_actualizacion.Pagina); // release sin instalador adjunto
+            return;
+        }
+        if (_descargando)
+            return;
+
+        _descargando = true;
+        var progreso = new Progress<double>(p => TextoEstadoActualizacion.Text = $"Descargando actualización… {p:P0}");
+        try
+        {
+            _instalador = await Actualizacion.DescargarAsync(_actualizacion, progreso);
+            TextoActualizacion.Text = $"MD Codex {_actualizacion.Version} está lista. Se instalará al cerrar la app.";
+            AccionActualizacion.Text = "Reiniciar ahora";
+            TextoEstadoActualizacion.Text = "Reiniciar para actualizar";
+            EstadoActualizacion.ToolTip = $"MD Codex {_actualizacion.Version} se instalará al cerrar la app. Clic para reiniciar ahora.";
+            AvisoActualizacion.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            TextoEstadoActualizacion.Text = "Actualización pendiente";
+            EstadoActualizacion.ToolTip = $"No se pudo descargar la actualización ({ex.Message}). Clic para reintentar.";
+        }
+        finally
+        {
+            _descargando = false;
+        }
     }
 
     // Con la barra lateral automática desplegada, un clic fuera de ella (y de la barra de actividad) la oculta.
@@ -2072,7 +2111,10 @@ public partial class MainWindow : Window
             return;
         }
         if (!ConfirmarDescartar(_pestanas))
+        {
             e.Cancel = true;
+            _reabrirTrasActualizar = false;
+        }
         else
             GuardarSesion();
         base.OnClosing(e);
@@ -2083,6 +2125,9 @@ public partial class MainWindow : Window
         SystemEvents.UserPreferenceChanged -= AlCambiarPreferencias;
         foreach (var p in _pestanas)
             p.Dispose();
+        // Con una actualización descargada, se instala ahora que la app se cierra.
+        if (_instalador is not null)
+            Actualizacion.Instalar(_instalador, _reabrirTrasActualizar);
         base.OnClosed(e);
     }
 }

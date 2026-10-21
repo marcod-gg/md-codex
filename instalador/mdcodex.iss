@@ -33,6 +33,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 ChangesAssociations=yes
 CloseApplications=yes
+; La app se reabre desde [Run] (con /REABRIR=1), no por el reinicio de aplicaciones de Windows.
+RestartApplications=no
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir=..\publicar
@@ -69,6 +71,8 @@ Root: HKA; Subkey: "Software\Classes\Applications\{#Ejecutable}\SupportedTypes";
 [Run]
 Filename: "{app}\{#Ejecutable}"; Description: "Abrir {#Nombre}"; Flags: nowait postinstall skipifsilent
 Filename: "ms-settings:defaultapps"; Description: "Elegir {#Nombre} como app predeterminada para .md"; Flags: shellexec nowait postinstall skipifsilent unchecked; Tasks: asociar
+; Actualización desde la app ("Reiniciar ahora"): instala en silencio y la vuelve a abrir.
+Filename: "{app}\{#Ejecutable}"; Flags: nowait runasoriginaluser; Check: Reabrir
 
 [Code]
 // MD Codex usa WebView2 para la vista previa. Viene con Windows 11 y con Edge en Windows 10,
@@ -82,6 +86,11 @@ begin
     RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'pv', Version) or
     RegQueryStringValue(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'pv', Version);
   Result := Result and (Version <> '') and (Version <> '0.0.0.0');
+end;
+
+function Reabrir(): Boolean;
+begin
+  Result := ExpandConstant('{param:REABRIR|0}') = '1';
 end;
 
 function InitializeSetup(): Boolean;

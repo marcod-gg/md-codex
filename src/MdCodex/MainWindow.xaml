@@ -486,7 +486,7 @@
                     <StackPanel Margin="0,2,0,0">
                         <TextBlock x:Name="TextoActualizacion" FontSize="13" TextWrapping="Wrap" />
                         <TextBlock FontSize="12" Margin="0,6,0,0">
-                            <Hyperlink Click="DescargarActualizacion_Click" Foreground="{DynamicResource Acento}">Descargar</Hyperlink>
+                            <Hyperlink Click="Actualizar_Click" Foreground="{DynamicResource Acento}"><Run x:Name="AccionActualizacion" Text="Actualizar" /></Hyperlink>
                         </TextBlock>
                     </StackPanel>
                 </DockPanel>
@@ -505,10 +505,10 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,6,0">
                     <Button x:Name="EstadoActualizacion" Style="{StaticResource ItemEstado}" Visibility="Collapsed"
-                            Click="DescargarActualizacion_Click">
+                            Click="Actualizar_Click">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" FontFamily="{StaticResource Iconos}" Margin="0,0,6,0" VerticalAlignment="Center" />
-                            <TextBlock Text="Actualización pendiente" VerticalAlignment="Center" />
+                            <TextBlock x:Name="TextoEstadoActualizacion" Text="Actualización pendiente" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
                     <Button x:Name="EstadoPosicion" Style="{StaticResource ItemEstado}" />
