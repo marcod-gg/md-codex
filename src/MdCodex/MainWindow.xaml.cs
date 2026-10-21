@@ -21,7 +21,8 @@ namespace MdCodex;
 
 public partial class MainWindow : Window
 {
-    private enum Modo { Vista, Dividido, Editor, Pro }
+    // Editor (Dividido: con la vista previa al lado) o Pro (por bloques).
+    private enum Modo { Dividido, Editor, Pro }
 
     // Host de la página del editor Pro, que vive en la carpeta Pro junto al .exe. No termina en
     // ".mdcodex" para no chocar con el filtro que sirve los archivos de los documentos.
@@ -44,7 +45,7 @@ public partial class MainWindow : Window
     private NodoArchivo? _nodoArrastrado;
     // Qué hacer con el nombre escrito en la fila de nombre (archivo nuevo, espacio nuevo o renombrado).
     private Action<string>? _alAceptarNombre;
-    private Modo _modo = Modo.Vista;
+    private Modo _modo = Modo.Dividido;
     private Panel _panel = Panel.Explorador;
     // Con la barra lateral automática, si está desplegada sobre el área de trabajo.
     private bool _lateralDesplegado;
@@ -200,13 +201,13 @@ public partial class MainWindow : Window
     }
 
     // El de la configuración, o el de la última vez.
+    // (Las sesiones de versiones anteriores pueden traer "Vista": se abre como editor con vista previa.)
     private Modo ModoDeInicio() => Config.ModoInicial switch
     {
-        ModoInicial.Vista => Modo.Vista,
-        ModoInicial.Dividido => Modo.Dividido,
+        ModoInicial.Vista or ModoInicial.Dividido => Modo.Dividido,
         ModoInicial.Editor => Modo.Editor,
         ModoInicial.Pro => Modo.Pro,
-        _ => Enum.TryParse<Modo>(_recientes.UltimaSesion?.Modo, out var modo) ? modo : Modo.Vista,
+        _ => Enum.TryParse<Modo>(_recientes.UltimaSesion?.Modo, out var modo) ? modo : Modo.Dividido,
     };
 
     private void GuardarSesion()
@@ -723,14 +724,11 @@ public partial class MainWindow : Window
     {
         if (_activa is null)
             return;
-        if (_modo != Modo.Vista)
-        {
-            var numero = Math.Min(linea + 1, Editor.Document.LineCount);
-            Editor.TextArea.Caret.Location = new TextLocation(numero, 1);
-            Editor.ScrollToVerticalOffset(Editor.TextArea.TextView.GetVisualTopByDocumentLine(numero));
-            Editor.TextArea.Focus();
-        }
-        if (_vistaLista && _modo != Modo.Editor)
+        var numero = Math.Min(linea + 1, Editor.Document.LineCount);
+        Editor.TextArea.Caret.Location = new TextLocation(numero, 1);
+        Editor.ScrollToVerticalOffset(Editor.TextArea.TextView.GetVisualTopByDocumentLine(numero));
+        Editor.TextArea.Focus();
+        if (_vistaLista && _modo == Modo.Dividido)
             Enviar(new { tipo = "linea", linea });
     }
 
@@ -1563,11 +1561,15 @@ public partial class MainWindow : Window
                 _ = SincronizarProAsync();
 
             _modo = modo;
-            BotonVista.IsChecked = modo == Modo.Vista;
-            BotonDividido.IsChecked = modo == Modo.Dividido;
-            BotonEditor.IsChecked = modo == Modo.Editor;
+            BotonEditor.IsChecked = modo is Modo.Dividido or Modo.Editor;
             BotonPro.IsChecked = modo == Modo.Pro;
-            EstadoModo.Content = modo.ToString();
+            BotonVistaPrevia.IsChecked = MenuVistaPrevia.IsChecked = modo == Modo.Dividido;
+            EstadoModo.Content = modo switch
+            {
+                Modo.Dividido => "Editor y vista previa",
+                Modo.Editor => "Editor",
+                _ => "Por bloques",
+            };
             AplicarDisposicion();
 
             if (_activa is not null && modo is Modo.Dividido or Modo.Editor)
@@ -1588,7 +1590,7 @@ public partial class MainWindow : Window
     {
         var hayDocumento = _activa is not null;
         var conEditor = hayDocumento && _modo is Modo.Dividido or Modo.Editor;
-        var conVista = !hayDocumento || _modo is Modo.Vista or Modo.Dividido;
+        var conVista = !hayDocumento || _modo == Modo.Dividido;
         var conPro = hayDocumento && _modo == Modo.Pro;
         VisorPro.Visibility = Visible(conPro);
 
@@ -2049,10 +2051,14 @@ public partial class MainWindow : Window
     private void BotonModo_Checked(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: string modo } && IsInitialized)
-            AplicarModo(Enum.Parse<Modo>(modo));
+            AplicarModo(modo == "Pro" ? Modo.Pro : ModoEditor());
     }
 
-    private void EstadoModo_Click(object sender, RoutedEventArgs e) => AplicarModo((Modo)(((int)_modo + 1) % 4));
+    // El modo Editor, con o sin la vista previa al lado según la preferencia.
+    private Modo ModoEditor() => Config.VistaPrevia ? Modo.Dividido : Modo.Editor;
+
+    // La barra de estado alterna entre el editor y el modo por bloques.
+    private void EstadoModo_Click(object sender, RoutedEventArgs e) => AplicarModo(_modo == Modo.Pro ? ModoEditor() : Modo.Pro);
 
     private void RefrescarArbol_Click(object sender, RoutedEventArgs e) => RefrescarArbol();
 
@@ -2094,8 +2100,6 @@ public partial class MainWindow : Window
     private void Nuevo_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         Agregar(Pestana.Nueva());
-        if (_modo == Modo.Vista)
-            AplicarModo(Modo.Dividido);
     }
 
     private void Abrir_Executed(object sender, ExecutedRoutedEventArgs e)
@@ -2465,15 +2469,80 @@ public partial class MainWindow : Window
 
     private void HayArchivo_CanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = _activa?.Ruta is not null;
 
-    // Negrita y cursiva del editor de texto; en el modo Pro, Ctrl+B y Ctrl+I los atiende el propio editor web.
-    private void EditorVisible_CanExecute(object sender, CanExecuteRoutedEventArgs e) =>
-        e.CanExecute = _activa is not null && _modo is Modo.Dividido or Modo.Editor;
+    // Negrita y cursiva: en el editor de texto, o en el modo por bloques (Ctrl+B y Ctrl+I los atiende la propia
+    // página; el menú se los pide con AccionProAsync).
+    private void Formato_CanExecute(object sender, CanExecuteRoutedEventArgs e) =>
+        e.CanExecute = _activa is not null && (_modo is Modo.Dividido or Modo.Editor || _proListo);
 
-    private void ModoVista_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Vista);
+    private void ModoEditor_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(ModoEditor());
 
-    private void ModoDividido_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Dividido);
+    // Ctrl+Mayús+V o el botón junto a Editor: muestra u oculta la vista previa (desde Por bloques, vuelve al
+    // editor con la vista previa). Se recuerda.
+    private void VistaPrevia_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        Config.VistaPrevia = _modo != Modo.Dividido;
+        _recientes.Guardar();
+        AplicarModo(ModoEditor());
+    }
 
-    private void ModoEditor_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Editor);
+    // ---------- Editar en el modo por bloques ----------
+
+    // Deshacer, rehacer, cortar, copiar, pegar y buscar: el editor de texto los atiende solo; en el modo por
+    // bloques (con el foco fuera de la página, como al usar el menú) se le piden a la página.
+    private void EdicionPro_CanExecute(object sender, CanExecuteRoutedEventArgs e) =>
+        e.CanExecute = _modo == Modo.Pro && _proListo && _activa is not null;
+
+    private async void EdicionPro_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (e.Command == ApplicationCommands.Find)
+        {
+            await BuscarEnProAsync();
+            return;
+        }
+        if (e.Command == ApplicationCommands.Paste)
+        {
+            // Una imagen se pega como al usar Ctrl+V en la página; el texto, como Markdown.
+            if (!PegarImagen() && Clipboard.ContainsText())
+                await AccionProAsync("pegar", Clipboard.GetText());
+            return;
+        }
+        var accion = e.Command == ApplicationCommands.Undo ? "deshacer"
+            : e.Command == ApplicationCommands.Redo ? "rehacer"
+            : e.Command == ApplicationCommands.Cut ? "cortar"
+            : "copiar";
+        if (await AccionProAsync(accion) is { Length: > 0 } seleccion)
+            Clipboard.SetText(seleccion);
+    }
+
+    // Llama a window.mdcodex.accion en la página del editor por bloques; devuelve lo que ella devuelva.
+    private async Task<string?> AccionProAsync(string accion, string? dato = null)
+    {
+        var resultado = await VisorPro.CoreWebView2.ExecuteScriptAsync(
+            $"window.mdcodex.accion({JsonSerializer.Serialize(accion)}, {JsonSerializer.Serialize(dato)})");
+        VisorPro.Focus();
+        return JsonSerializer.Deserialize<string?>(resultado);
+    }
+
+    // El buscador de WebView2, con lo seleccionado como texto inicial.
+    private async Task BuscarEnProAsync()
+    {
+        if (_entorno is null)
+            return;
+        var seleccion = JsonSerializer.Deserialize<string?>(
+            await VisorPro.CoreWebView2.ExecuteScriptAsync("window.getSelection().toString()")) ?? "";
+        var opciones = _entorno.CreateFindOptions();
+        opciones.FindTerm = seleccion.Split('\n')[0];
+        opciones.SuppressDefaultFindDialog = false;
+        VisorPro.Focus();
+        try
+        {
+            await VisorPro.CoreWebView2.Find.StartAsync(opciones);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            // Sin texto que buscar, WebView2 puede no abrir el buscador: no hay nada más que hacer.
+        }
+    }
 
     private void ModoPro_Executed(object sender, ExecutedRoutedEventArgs e) => AplicarModo(Modo.Pro);
 
@@ -2879,9 +2948,21 @@ public partial class MainWindow : Window
         AplicarLateral();
     }
 
-    private void Negrita_Executed(object sender, ExecutedRoutedEventArgs e) => Envolver("**");
+    private async void Negrita_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_modo == Modo.Pro)
+            await AccionProAsync("negrita");
+        else
+            Envolver("**");
+    }
 
-    private void Cursiva_Executed(object sender, ExecutedRoutedEventArgs e) => Envolver("*");
+    private async void Cursiva_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_modo == Modo.Pro)
+            await AccionProAsync("cursiva");
+        else
+            Envolver("*");
+    }
 
     protected override void OnClosing(CancelEventArgs e)
     {

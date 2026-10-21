@@ -4,7 +4,8 @@ namespace MdCodex;
 
 public enum TemaPreferido { Sistema, Claro, Oscuro }
 
-// Modo con que se abre la app: el de la última vez o uno fijo.
+// Modo con que se abre la app: el de la última vez o uno fijo. Vista ya no se ofrece (se lee de versiones
+// anteriores y se lleva a Dividido: editor con vista previa).
 public enum ModoInicial { Ultimo, Vista, Dividido, Editor, Pro }
 
 public enum CambioExterno { Recargar, Preguntar }
@@ -20,6 +21,8 @@ public sealed class Configuracion
     public TemaPreferido Tema { get; set; } = TemaPreferido.Sistema;
     public ModoInicial ModoInicial { get; set; } = ModoInicial.Ultimo;
     public bool ReabrirSesion { get; set; } = true;
+    // En el modo Editor, la vista previa al lado (Ver → Vista previa).
+    public bool VistaPrevia { get; set; } = true;
     public CambioExterno CambioExterno { get; set; } = CambioExterno.Recargar;
     public bool BuscarActualizaciones { get; set; } = true;
 
@@ -50,7 +53,7 @@ public sealed class Configuracion
 
     // Para ajustar una sola vez lo guardado por versiones anteriores (ver Migrar).
     public int Version { get; set; }
-    private const int VersionActual = 2;
+    private const int VersionActual = 3;
 
     // Imágenes del usuario\md-codex.
     public static string CarpetaImagenesPorDefecto { get; } =
@@ -69,6 +72,9 @@ public sealed class Configuracion
             if (CarpetaImagenes == "imagenes")
                 CarpetaImagenes = CarpetaImagenesPorDefecto;
         }
+        // La 1.3.9 deja solo Editor (con o sin vista previa) y Por bloques.
+        if (Version < 3 && ModoInicial == ModoInicial.Vista)
+            ModoInicial = ModoInicial.Dividido;
         Version = VersionActual;
         return true;
     }

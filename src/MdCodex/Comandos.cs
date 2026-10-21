@@ -4,10 +4,9 @@ namespace MdCodex;
 
 public static class Comandos
 {
-    public static readonly RoutedUICommand ModoVista = new("Vista", nameof(ModoVista), typeof(Comandos));
-    public static readonly RoutedUICommand ModoDividido = new("Dividido", nameof(ModoDividido), typeof(Comandos));
     public static readonly RoutedUICommand ModoEditor = new("Editor", nameof(ModoEditor), typeof(Comandos));
-    public static readonly RoutedUICommand ModoPro = new("Pro", nameof(ModoPro), typeof(Comandos));
+    public static readonly RoutedUICommand ModoPro = new("Por bloques", nameof(ModoPro), typeof(Comandos));
+    public static readonly RoutedUICommand VistaPrevia = new("Vista previa", nameof(VistaPrevia), typeof(Comandos));
     public static readonly RoutedUICommand Negrita = new("Negrita", nameof(Negrita), typeof(Comandos));
     public static readonly RoutedUICommand Cursiva = new("Cursiva", nameof(Cursiva), typeof(Comandos));
     public static readonly RoutedUICommand AbrirCarpeta = new("Abrir carpeta", nameof(AbrirCarpeta), typeof(Comandos));

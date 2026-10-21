@@ -1,11 +1,12 @@
 // Editor "Pro" de MD Codex: edición por bloques sobre Milkdown Crepe.
 // La app es la dueña del documento: le envía el Markdown a cargar y recibe los cambios.
 import { Crepe } from '@milkdown/crepe';
-import { commandsCtx, editorViewCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core';
-import { clearTextInCurrentBlockCommand } from '@milkdown/kit/preset/commonmark';
+import { commandsCtx, editorViewCtx, remarkStringifyOptionsCtx, serializerCtx } from '@milkdown/kit/core';
+import { undoCommand, redoCommand } from '@milkdown/kit/plugin/history';
+import { clearTextInCurrentBlockCommand, toggleEmphasisCommand, toggleStrongCommand } from '@milkdown/kit/preset/commonmark';
 import { remarkGFMPlugin } from '@milkdown/kit/preset/gfm';
 import { TextSelection } from '@milkdown/kit/prose/state';
-import { replaceAll } from '@milkdown/kit/utils';
+import { callCommand, insert, replaceAll } from '@milkdown/kit/utils';
 // Las partes del tema que se usan; latex.css se omite porque arrastra ~1 MB de fuentes de KaTeX.
 import '@milkdown/crepe/theme/common/prosemirror.css';
 import '@milkdown/crepe/theme/common/reset.css';
@@ -156,8 +157,43 @@ function pendiente() {
   return { id: pestana, markdown };
 }
 
+// Lo seleccionado, como Markdown (para copiar y cortar desde el menú de la app).
+function seleccionEnMarkdown(ctx) {
+  const { state } = ctx.get(editorViewCtx);
+  if (state.selection.empty) return '';
+  const doc = state.schema.topNodeType.createAndFill(undefined, state.selection.content().content);
+  return doc ? ctx.get(serializerCtx)(doc) : '';
+}
+
+// Acciones del menú Editar de la app, que en este modo no llegan como teclas. Copiar y cortar devuelven
+// la selección en Markdown (la app la deja en el portapapeles); pegar inserta Markdown.
+function accion(nombre, dato) {
+  const editor = crepe.editor;
+  let resultado = null;
+  switch (nombre) {
+    case 'negrita': editor.action(callCommand(toggleStrongCommand.key)); break;
+    case 'cursiva': editor.action(callCommand(toggleEmphasisCommand.key)); break;
+    case 'deshacer': editor.action(callCommand(undoCommand.key)); break;
+    case 'rehacer': editor.action(callCommand(redoCommand.key)); break;
+    case 'pegar': editor.action(insert(dato ?? '')); break;
+    case 'copiar':
+    case 'cortar':
+      resultado = editor.action(ctx => {
+        const texto = seleccionEnMarkdown(ctx);
+        if (nombre === 'cortar' && texto) {
+          const vista = ctx.get(editorViewCtx);
+          vista.dispatch(vista.state.tr.deleteSelection());
+        }
+        return texto;
+      });
+      break;
+  }
+  raiz.querySelector('.ProseMirror')?.focus();
+  return resultado;
+}
+
 // La app lo llama antes de guardar o cerrar, para no perder lo último que se escribió.
-window.mdcodex = { pendiente: () => { clearTimeout(demora); return pendiente(); } };
+window.mdcodex = { pendiente: () => { clearTimeout(demora); return pendiente(); }, accion };
 
 function cargar(m) {
   avisar(); // lo pendiente de la pestaña anterior
